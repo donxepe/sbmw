@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e0f11" />
+  <title>Minimalist Full Body</title>
+
+  <!-- PWA manifest + iOS install support -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Full Body" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- React + Babel via CDN (cached offline by the service worker after first load) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; background: #0e0f11; }
+    body { padding-bottom: env(safe-area-inset-bottom); }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+    textarea { font-family: 'DM Mono', monospace; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+const STORE_LOGS = "workout-logs-min";
+const STORE_HISTORY = "workout-history-min";
+
+const days = [
+  {
+    id: "A", label: "Day A", focus: "Full Body A", sub: "Press · Pull · Squat", color: "#e05c3a",
+    exercises: [
+      { name: "Chest Press Machine", videoQuery: "jeff nippard chest press machine form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Your main pressing movement. Adjust seat so handles align with lower chest. Aggressive press, controlled lowering.", target: "Chest, Anterior Delt, Triceps" },
+      { name: "Lat Pulldown (wide grip)", videoQuery: "jeff nippard lat pulldown form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Covers lats + biceps in one movement — that's why it earns a spot in a minimalist plan. Full stretch at top.", target: "Lats, Biceps" },
+      { name: "Hack Squat or Leg Press", videoQuery: "jeff nippard hack squat form", sets: 3, reps: "6–8", rir: "2", rest: "3 min", note: "Cycling hits quads but never under heavy tension at depth. One loaded movement covers what the bike misses. Go deep.", target: "Quads, Glutes" },
+      { name: "Machine Shoulder Press", videoQuery: "jeff nippard machine shoulder press form", sets: 2, reps: "6–8", rir: "2", rest: "2 min", note: "Two hard sets is enough on top of all the chest pressing. Full lockout, no shrugging.", target: "Delts, Triceps" },
+      { name: "Cable Lateral Raise", videoQuery: "jeff nippard cable lateral raise form", sets: 2, reps: "10–12", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: hit 10–12 to failure, immediately drop the pin ~25–30% and go again to failure, then drop once more. ~5s between drops. Side delts get zero work from your compounds — this is their only direct stimulus.", note: "Side delts are the one muscle your pressing barely touches. Strict form, lead with the elbow, no swinging.", target: "Medial Delt" },
+    ],
+  },
+  {
+    id: "B", label: "Day B", focus: "Full Body B", sub: "Incline · Row · Hinge", color: "#3a7de0",
+    exercises: [
+      { name: "Incline Machine Press", videoQuery: "jeff nippard incline machine press form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Upper-chest emphasis to complement Day A's flat press. 30–45° incline.", target: "Upper Chest, Anterior Delt, Triceps" },
+      { name: "Seated Cable Row (neutral, close)", videoQuery: "jeff nippard seated cable row form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Horizontal pull to balance Day A's vertical pulldown. Drives mid-back + biceps. Don't swing the torso.", target: "Mid-back, Lats, Biceps, Rear Delt" },
+      { name: "Lying Leg Curl Machine", videoQuery: "jeff nippard lying leg curl form", sets: 3, reps: "6–8", rir: "1–2", rest: "2 min", note: "Cycling is quad-dominant and starves the hamstrings. This is their main work for the week.", target: "Hamstrings" },
+      { name: "Cable Pull-Through (rope)", videoQuery: "jeff nippard cable pull through form", sets: 2, reps: "8–10", rir: "2", rest: "2 min", note: "Hip-hinge for glutes — the other thing cycling skips. Strict hinge, not a squat. Slightly higher reps to spare the lower back.", target: "Glutes, Hamstrings, Erectors" },
+      { name: "Cable Curl (EZ or straight bar)", videoQuery: "jeff nippard cable curl ez bar form", sets: 2, reps: "8–10", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: curl to failure, drop the pin ~30% and continue to failure, drop once more. Cables make the load swap instant — ideal for this. Balances the arm work, since biceps get less compound exposure than triceps.", note: "Cables hold tension at the bottom where dumbbells go slack. Supinate fully, keep the shoulders still.", target: "Biceps" },
+    ],
+  },
+];
+
+const principles = [
+  { icon: "✂️", title: "Minimum Effective Dose", body: "The first few hard sets per muscle deliver most of the growth. This plan harvests the high-yield part of the curve and skips the low-yield tail." },
+  { icon: "🎯", title: "Effort Over Volume", body: "Fewer sets means each must count. RIR 1–2 on compounds, true failure on the drop sets — half-effort sets waste a minimalist plan." },
+  { icon: "🧩", title: "Compound Bias", body: "4 of 5 movements per session are multi-joint, so each trains several muscles. That's how 5 exercises can cover the whole body." },
+  { icon: "⬇️", title: "Drop Sets = Time Efficiency", body: "Evidence (Sødal 2023; Coleman 2022 meta-analyses): comparable hypertrophy to traditional sets in 1/2–1/3 the time. Used here on the final isolation only." },
+  { icon: "🚴", title: "Cycling Supplement", body: "Your commute covers aerobic work + quad exposure, so legs need only one quad and one hamstring/glute movement across the week." },
+  { icon: "📅", title: "Scale Up Later", body: "If growth stalls after ~8–12 weeks, add volume to lagging muscles or a 3rd day — don't inflate everything at once." },
+];
+
+function key(dayId, exIdx, setIdx) { return `${dayId}-${exIdx}-${setIdx}`; }
+
+// localStorage helpers — synchronous, work in any real browser
+function loadJSON(k, fallback) {
+  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }
+  catch (_) { return fallback; }
+}
+function saveJSON(k, val) {
+  try { localStorage.setItem(k, JSON.stringify(val)); } catch (_) {}
+}
+
+function Routine() {
+  const [activeDay, setActiveDay] = useState("A");
+  const [expanded, setExpanded] = useState(null);
+  const [logs, setLogs] = useState(() => loadJSON(STORE_LOGS, {}));
+  const [history, setHistory] = useState(() => loadJSON(STORE_HISTORY, []));
+  const [view, setView] = useState("workout");
+  const [expandedSession, setExpandedSession] = useState(null);
+  const [notice, setNotice] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+
+  const day = days.find((d) => d.id === activeDay);
+
+  function flash(msg) { setNotice(msg); setTimeout(() => setNotice(""), 2600); }
+
+  function updateLog(dayId, exIdx, setIdx, field, value) {
+    const k = key(dayId, exIdx, setIdx);
+    setLogs((prev) => {
+      const next = { ...prev, [k]: { ...prev[k], [field]: value } };
+      saveJSON(STORE_LOGS, next);
+      return next;
+    });
+  }
+  function getLog(dayId, exIdx, setIdx) { return logs[key(dayId, exIdx, setIdx)] || { weight: "", reps: "" }; }
+  function hasAnyLog(dayId, exIdx) {
+    return Object.keys(logs).some((k) => k.startsWith(`${dayId}-${exIdx}-`) && (logs[k]?.weight || logs[k]?.reps));
+  }
+  function clearLogs() { localStorage.removeItem(STORE_LOGS); setLogs({}); }
+
+  function persistHistory(next) { setHistory(next); saveJSON(STORE_HISTORY, next); }
+
+  function finishSession() {
+    const hasData = Object.values(logs).some((v) => v && (v.weight || v.reps));
+    if (!hasData) { flash("Nothing logged yet — fill in some sets first."); return; }
+    const session = { id: Date.now(), date: new Date().toISOString(), dayId: activeDay, focus: day.focus, entries: JSON.parse(JSON.stringify(logs)) };
+    persistHistory([session, ...history]);
+    clearLogs();
+    flash(`Saved ${day.focus} to history. Sheet cleared.`);
+    setView("history");
+  }
+  function deleteSession(id) { persistHistory(history.filter((s) => s.id !== id)); }
+
+  // Real file download — works in any browser
+  function exportData() {
+    const payload = { app: "minimalist-full-body", version: 1, exportedAt: new Date().toISOString(), current: logs, history };
+    const json = JSON.stringify(payload, null, 2);
+    try {
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `workout-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      flash("Backup downloaded.");
+    } catch (_) {
+      navigator.clipboard?.writeText(json).then(() => flash("Copied backup to clipboard.")).catch(() => flash("Export failed."));
+    }
+  }
+
+  function applyImport(data) {
+    const importedHistory = Array.isArray(data.history) ? data.history : [];
+    const importedCurrent = data.current && typeof data.current === "object" ? data.current : {};
+    const byId = {};
+    [...importedHistory, ...history].forEach((s) => { if (s && s.id) byId[s.id] = s; });
+    const merged = Object.values(byId).sort((a, b) => new Date(b.date) - new Date(a.date));
+    persistHistory(merged);
+    const currentHasData = Object.values(logs).some((v) => v && (v.weight || v.reps));
+    if (!currentHasData && Object.keys(importedCurrent).length) {
+      setLogs(importedCurrent); saveJSON(STORE_LOGS, importedCurrent);
+    }
+    flash(`Imported ${importedHistory.length} session(s).`);
+    setImportOpen(false); setImportText(""); setView("history");
+  }
+
+  // Real file picker — works in any browser
+  function importFromFile() {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = "application/json,.json";
+    input.onchange = (e) => {
+      const file = e.target.files?.[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => { try { applyImport(JSON.parse(ev.target.result)); } catch (_) { flash("Couldn't read that file."); } };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+  function importFromText() {
+    try { applyImport(JSON.parse(importText.trim())); } catch (_) { flash("That doesn't look like valid backup JSON."); }
+  }
+
+  function fmtDate(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + " · " +
+        d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    } catch (_) { return iso; }
+  }
+
+  function sessionSummary(session) {
+    const d = days.find((x) => x.id === session.dayId);
+    if (!d) return [];
+    return d.exercises.map((ex, i) => {
+      const sets = [];
+      Object.keys(session.entries).filter((k) => k.startsWith(`${session.dayId}-${i}-`)).forEach((k) => {
+        const setKey = k.split("-").slice(2).join("-");
+        const v = session.entries[k];
+        if (v && (v.weight || v.reps)) sets.push({ setKey, ...v });
+      });
+      return { name: ex.name, sets };
+    }).filter((ex) => ex.sets.length > 0);
+  }
+
+  const inputStyle = (filled, accent) => ({
+    background: "#0e0f11", border: `1px solid ${filled ? accent + "44" : "#222"}`,
+    borderRadius: 5, color: "#ddd", fontFamily: "'DM Mono'", fontSize: 16,
+    padding: "8px 10px", textAlign: "center", width: "100%", boxSizing: "border-box", outline: "none",
+  });
+
+  return (
+    <div style={{ fontFamily: "'DM Sans', sans-serif", background: "#0e0f11", minHeight: "100vh", color: "#e8e6e1" }}>
+      {/* Header */}
+      <div style={{ borderBottom: "1px solid #1e2025", padding: "calc(28px + env(safe-area-inset-top)) 28px 24px" }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: "#555", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+            Minimalist · 2 days/week · Full body
+          </span>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginTop: 6, gap: 12 }}>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>Minimalist Full Body</h1>
+              <p style={{ margin: "6px 0 0", color: "#666", fontSize: 13.5, lineHeight: 1.5 }}>
+                5 movements/session · 6–8 reps · drop set on the final isolation
+              </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", marginTop: 2 }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={exportData} style={btn()}>↓ export</button>
+                <button onClick={() => setImportOpen(true)} style={btn()}>↑ import</button>
+              </div>
+              {Object.keys(logs).length > 0 && (
+                <button onClick={clearLogs} style={btn("#2a1a1a", "#6b3030")}>clear sheet</button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notice toast */}
+      {notice && (
+        <div style={{ position: "fixed", bottom: "calc(20px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", background: "rgba(20,22,26,0.97)", border: "1px solid #3aa87d55", color: "#cfe8dd", fontFamily: "'DM Mono'", fontSize: 12, padding: "10px 16px", borderRadius: 8, zIndex: 200, boxShadow: "0 4px 20px rgba(0,0,0,0.5)", maxWidth: "calc(100vw - 32px)", textAlign: "center" }}>
+          {notice}
+        </div>
+      )}
+
+      {/* Import modal */}
+      {importOpen && (
+        <div onClick={() => setImportOpen(false)} style={modalBg}>
+          <div onClick={(e) => e.stopPropagation()} style={modalCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#e8e6e1" }}>Import backup</span>
+              <button onClick={() => setImportOpen(false)} style={{ background: "none", border: "none", color: "#666", fontSize: 18, cursor: "pointer" }}>×</button>
+            </div>
+            <button onClick={importFromFile} style={{ width: "100%", background: "#3aa87d22", border: "1px solid #3aa87d66", color: "#3aa87d", fontFamily: "'DM Mono'", fontSize: 12.5, fontWeight: 500, cursor: "pointer", padding: "12px", borderRadius: 6, letterSpacing: "0.05em", marginBottom: 14 }}>
+              ↑ Choose backup file…
+            </button>
+            <div style={{ fontSize: 11, color: "#555", textAlign: "center", marginBottom: 12, fontFamily: "'DM Mono'" }}>— or paste the JSON —</div>
+            <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"app":"minimalist-full-body", ...}'
+              style={{ width: "100%", minHeight: 110, boxSizing: "border-box", background: "#0e0f11", border: "1px solid #222", borderRadius: 8, color: "#ddd", fontSize: 12, lineHeight: 1.5, padding: "10px 12px", outline: "none", resize: "vertical" }} />
+            <button onClick={importFromText} disabled={!importText.trim()} style={{ width: "100%", marginTop: 12, background: importText.trim() ? "#3aa87d22" : "#1a1c20", border: `1px solid ${importText.trim() ? "#3aa87d66" : "#222"}`, color: importText.trim() ? "#3aa87d" : "#444", fontFamily: "'DM Mono'", fontSize: 12, fontWeight: 500, cursor: importText.trim() ? "pointer" : "default", padding: "10px", borderRadius: 6, letterSpacing: "0.05em" }}>
+              ✓ Load pasted data
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* View switch */}
+      <div style={{ borderBottom: "1px solid #1e2025", padding: "0 28px" }}>
+        <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", gap: 4 }}>
+          {[{ id: "workout", label: "Workout" }, { id: "history", label: `History${history.length ? ` (${history.length})` : ""}` }].map((v) => (
+            <button key={v.id} onClick={() => setView(v.id)} style={{ background: "none", border: "none", borderBottom: view === v.id ? "2px solid #888" : "2px solid transparent", color: view === v.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "12px 16px 11px", fontSize: 12.5, fontFamily: "'DM Mono'", fontWeight: 500, marginBottom: -1, letterSpacing: "0.05em" }}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* WORKOUT VIEW */}
+      {view === "workout" && (<>
+        <div style={{ borderBottom: "1px solid #1e2025", padding: "0 28px" }}>
+          <div style={{ maxWidth: 720, margin: "0 auto", display: "flex" }}>
+            {days.map((d) => (
+              <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
+                <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 28px" }}>
+          <div style={{ marginBottom: 20 }}>
+            <span style={{ display: "inline-block", background: day.color + "18", color: day.color, fontSize: 11, fontFamily: "'DM Mono'", letterSpacing: "0.12em", textTransform: "uppercase", padding: "4px 10px", borderRadius: 4 }}>{day.sub}</span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {day.exercises.map((ex, i) => {
+              const isOpen = expanded === i;
+              const logged = hasAnyLog(day.id, i);
+              return (
+                <div key={i} style={{ background: isOpen ? "#14161a" : "#111317", border: `1px solid ${isOpen ? day.color + "55" : "#1c1e24"}`, borderRadius: 8, overflow: "hidden" }}>
+                  <div onClick={() => setExpanded(isOpen ? null : i)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: day.color, minWidth: 20 }}>{String(i + 1).padStart(2, "0")}</span>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 14, fontWeight: 500, color: "#ddd" }}>{ex.name}</span>
+                          {ex.dropSet && <span style={{ fontSize: 10, fontFamily: "'DM Mono'", color: "#0e0f11", background: day.color, padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>⬇ drop set</span>}
+                          {logged && <span style={{ fontSize: 10, fontFamily: "'DM Mono'", color: day.color, background: day.color + "18", padding: "1px 6px", borderRadius: 3 }}>logged</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{ex.target}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 12, color: "#888", fontFamily: "'DM Mono'" }}>{ex.sets}×{ex.reps}</div>
+                        <div style={{ fontSize: 11, color: "#444", marginTop: 1 }}>RIR {ex.rir}</div>
+                      </div>
+                      <span style={{ color: "#333", fontSize: 14, marginLeft: 4 }}>{isOpen ? "−" : "+"}</span>
+                    </div>
+                  </div>
+
+                  {isOpen && (
+                    <div style={{ borderTop: "1px solid #1e2025", padding: "16px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+                        <div>
+                          <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 4 }}>Coaching cue</div>
+                          <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.5, marginBottom: 10 }}>{ex.note}</div>
+                          <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.videoQuery)}`} target="_blank" rel="noopener noreferrer"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontFamily: "'DM Mono'", color: day.color, background: day.color + "14", letterSpacing: "0.05em", textDecoration: "none", border: `1px solid ${day.color}66`, borderRadius: 4, padding: "6px 12px" }}>
+                            ▶ form video on YouTube
+                          </a>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {[{ label: "Sets", val: ex.dropSet ? `${ex.sets} (+drop)` : ex.sets }, { label: "Reps", val: ex.reps }, { label: "RIR", val: ex.rir }, { label: "Rest", val: ex.rest }].map(({ label, val }) => (
+                            <div key={label} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #1a1c21", paddingBottom: 6 }}>
+                              <span style={{ fontSize: 11, color: "#444", textTransform: "uppercase", fontFamily: "'DM Mono'" }}>{label}</span>
+                              <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Mono'" }}>{val}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {ex.dropSet && (
+                        <div style={{ background: day.color + "12", border: `1px solid ${day.color}33`, borderRadius: 6, padding: "10px 12px", marginBottom: 16 }}>
+                          <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: day.color, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>⬇ drop set protocol</div>
+                          <div style={{ fontSize: 12.5, color: "#b0b0b0", lineHeight: 1.5 }}>{ex.dropNote}</div>
+                        </div>
+                      )}
+
+                      <div style={{ borderTop: "1px solid #1a1c21", paddingTop: 14 }}>
+                        <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 10 }}>Log weight &amp; reps</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 1fr", gap: "6px 10px", alignItems: "center" }}>
+                          <div />
+                          <div style={{ fontSize: 10, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", textAlign: "center" }}>lbs</div>
+                          <div style={{ fontSize: 10, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", textAlign: "center" }}>reps done</div>
+
+                          {Array.from({ length: ex.sets }).map((_, s) => {
+                            const isDropTop = ex.dropSet && s === ex.sets - 1;
+                            const log = getLog(day.id, i, s);
+                            const filled = log.weight || log.reps;
+                            return (
+                              <React.Fragment key={`set-${s}`}>
+                                <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#555" }}>{isDropTop ? "S" + (s + 1) + " ⬇" : "S" + (s + 1)}</div>
+                                <input type="number" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="number" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
+                              </React.Fragment>
+                            );
+                          })}
+
+                          {ex.dropSet && ["d1", "d2"].map((dk, di) => {
+                            const log = getLog(day.id, i, dk);
+                            const filled = log.weight || log.reps;
+                            return (
+                              <React.Fragment key={`drop-${dk}`}>
+                                <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#555", paddingLeft: 12 }}>↳ d{di + 1}</div>
+                                <input type="number" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="number" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                        {ex.dropSet && <div style={{ fontSize: 11, color: "#3f3f3f", marginTop: 8, fontStyle: "italic" }}>S{ex.sets} ⬇ = drop set's top weight · ↳ d1, d2 = the two load drops</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <button onClick={finishSession} style={{ marginTop: 20, width: "100%", background: day.color + "16", border: `1px solid ${day.color}66`, color: day.color, fontFamily: "'DM Mono'", fontSize: 13, fontWeight: 500, cursor: "pointer", padding: "14px", borderRadius: 8, letterSpacing: "0.05em" }}>
+            ✓ Finish &amp; save {day.focus} to history
+          </button>
+          <div style={{ fontSize: 11, color: "#3f3f3f", marginTop: 8, textAlign: "center", lineHeight: 1.5 }}>Saves a dated snapshot, then clears the sheet for next time.</div>
+
+          <div style={{ marginTop: 28, background: "#111317", border: "1px solid #1c1e24", borderRadius: 8, padding: "16px" }}>
+            <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 12 }}>Weekly direct sets per muscle</div>
+            {[{ muscle: "Chest", sets: 6, color: "#e05c3a" }, { muscle: "Back / Lats", sets: 6, color: "#3a7de0" }, { muscle: "Shoulders (medial)", sets: 4, color: "#9b59b6" }, { muscle: "Biceps", sets: 2, color: "#3a7de0" }, { muscle: "Quads", sets: 3, color: "#3aa87d" }, { muscle: "Hams / Glutes", sets: 5, color: "#3aa87d" }].map(({ muscle, sets, color }) => (
+              <div key={muscle} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <div style={{ width: 140, fontSize: 12, color: "#777" }}>{muscle}</div>
+                <div style={{ flex: 1, background: "#1a1c22", borderRadius: 3, height: 6, overflow: "hidden" }}><div style={{ width: `${(sets / 8) * 100}%`, height: "100%", background: color, borderRadius: 3 }} /></div>
+                <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: "#555", width: 28, textAlign: "right" }}>{sets}</div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: "#3f3f3f", marginTop: 10, fontStyle: "italic", lineHeight: 1.5 }}>Deliberately lean. Triceps are covered by the 3 weekly presses; biceps get heavy indirect work from pulldowns + rows on top of the direct curl.</div>
+          </div>
+
+          <div style={{ marginTop: 28, paddingBottom: 40 }}>
+            <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 14 }}>Why this works</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {principles.map(({ icon, title, body }) => (
+                <div key={title} style={{ background: "#111317", border: "1px solid #1c1e24", borderRadius: 8, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 16, marginBottom: 6 }}>{icon}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "#ccc", marginBottom: 4 }}>{title}</div>
+                  <div style={{ fontSize: 12, color: "#666", lineHeight: 1.5 }}>{body}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </>)}
+
+      {/* HISTORY VIEW */}
+      {view === "history" && (
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 28px 40px" }}>
+          {history.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#555" }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 14, color: "#888", marginBottom: 6 }}>No saved sessions yet</div>
+              <div style={{ fontSize: 12.5, color: "#555", lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>Log your sets in the Workout tab, then tap Finish &amp; save to snapshot the session here.</div>
+            </div>
+          ) : (<>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", letterSpacing: "0.1em" }}>{history.length} saved session{history.length !== 1 ? "s" : ""}</span>
+              <button onClick={exportData} style={btn()}>↓ export backup</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {history.map((session) => {
+                const d = days.find((x) => x.id === session.dayId);
+                const accent = d ? d.color : "#888";
+                const isOpen = expandedSession === session.id;
+                const summary = sessionSummary(session);
+                return (
+                  <div key={session.id} style={{ background: isOpen ? "#14161a" : "#111317", border: `1px solid ${isOpen ? accent + "55" : "#1c1e24"}`, borderRadius: 8, overflow: "hidden" }}>
+                    <div onClick={() => setExpandedSession(isOpen ? null : session.id)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 4, background: accent, display: "inline-block" }} />
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 500, color: "#ddd" }}>{session.focus}</div>
+                          <div style={{ fontSize: 12, color: "#555", marginTop: 2, fontFamily: "'DM Mono'" }}>{fmtDate(session.date)}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 11, color: "#555", fontFamily: "'DM Mono'" }}>{summary.length} ex</span>
+                        <span style={{ color: "#333", fontSize: 14 }}>{isOpen ? "−" : "+"}</span>
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div style={{ borderTop: "1px solid #1e2025", padding: "14px 16px" }}>
+                        {summary.map((ex, idx) => (
+                          <div key={idx} style={{ marginBottom: idx < summary.length - 1 ? 14 : 0 }}>
+                            <div style={{ fontSize: 12.5, color: "#bbb", fontWeight: 500, marginBottom: 6 }}>{ex.name}</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {ex.sets.map((s, si) => (
+                                <span key={si} style={{ fontFamily: "'DM Mono'", fontSize: 11.5, color: "#999", background: "#0e0f11", border: "1px solid #222", borderRadius: 4, padding: "3px 8px" }}>
+                                  <span style={{ color: "#555" }}>{s.setKey.startsWith("d") ? "↳" + s.setKey : s.setKey.toUpperCase()}</span> {s.weight || "—"}<span style={{ color: "#444" }}>lb</span> × {s.reps || "—"}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        <button onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }} style={{ marginTop: 14, ...btn("#2a1a1a", "#6b3030") }}>delete session</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function btn(border = "#2a2c33", color = "#999") {
+  return { background: "none", border: `1px solid ${border}`, borderRadius: 5, color, fontFamily: "'DM Mono'", fontSize: 11, cursor: "pointer", padding: "6px 10px", whiteSpace: "nowrap", letterSpacing: "0.05em" };
+}
+const modalBg = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 };
+const modalCard = { background: "#14161a", border: "1px solid #2a2c33", borderRadius: 12, padding: 20, width: "100%", maxWidth: 460, boxShadow: "0 10px 40px rgba(0,0,0,0.6)" };
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Routine />);
+
+// Register the service worker for offline + installability
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+  </script>
+</body>
+</html>
