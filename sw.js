@@ -1,5 +1,5 @@
 // Bump CACHE version to force an update when you change the app.
-const CACHE = "minimalist-fb-v1";
+const CACHE = "minimalist-fb-v2";
 
 const ASSETS = [
   "./",
@@ -40,9 +40,11 @@ self.addEventListener("fetch", (event) => {
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req).then((res) => {
-        // Cache successful same-origin and CDN responses for next time
-        const copy = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
+        // Only cache successful responses — a cached 404 would be served forever
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
+        }
         return res;
       }).catch(() => cached);
     })

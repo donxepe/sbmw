@@ -35,7 +35,7 @@
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef } = React;
+const { useState, useRef } = React;
 
 const STORE_LOGS = "workout-logs-min";
 const STORE_HISTORY = "workout-history-min";
@@ -44,21 +44,21 @@ const days = [
   {
     id: "A", label: "Day A", focus: "Full Body A", sub: "Press · Pull · Squat", color: "#e05c3a",
     exercises: [
-      { name: "Chest Press Machine", videoQuery: "jeff nippard chest press machine form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Your main pressing movement. Adjust seat so handles align with lower chest. Aggressive press, controlled lowering.", target: "Chest, Anterior Delt, Triceps" },
-      { name: "Lat Pulldown (wide grip)", videoQuery: "jeff nippard lat pulldown form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Covers lats + biceps in one movement — that's why it earns a spot in a minimalist plan. Full stretch at top.", target: "Lats, Biceps" },
-      { name: "Hack Squat or Leg Press", videoQuery: "jeff nippard hack squat form", sets: 3, reps: "6–8", rir: "2", rest: "3 min", note: "Cycling hits quads but never under heavy tension at depth. One loaded movement covers what the bike misses. Go deep.", target: "Quads, Glutes" },
-      { name: "Machine Shoulder Press", videoQuery: "jeff nippard machine shoulder press form", sets: 2, reps: "6–8", rir: "2", rest: "2 min", note: "Two hard sets is enough on top of all the chest pressing. Full lockout, no shrugging.", target: "Delts, Triceps" },
-      { name: "Cable Lateral Raise", videoQuery: "jeff nippard cable lateral raise form", sets: 2, reps: "10–12", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: hit 10–12 to failure, immediately drop the pin ~25–30% and go again to failure, then drop once more. ~5s between drops. Side delts get zero work from your compounds — this is their only direct stimulus.", note: "Side delts are the one muscle your pressing barely touches. Strict form, lead with the elbow, no swinging.", target: "Medial Delt" },
+      { name: "Chest Press Machine", videoQuery: "jeff nippard chest press machine form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Your main pressing movement. Adjust seat so handles align with lower chest. Aggressive press, controlled lowering.", target: "Chest, Anterior Delt, Triceps", warmup: [{ pct: 50, reps: 8, label: "50%" }, { pct: 75, reps: 4, label: "75%" }], warmupNote: "First movement of the session — two ramp sets to warm the shoulder joint and rehearse the groove before the working weight. ~60s between them; these aren't working sets and don't count toward volume." },
+      { name: "Lat Pulldown (wide grip)", videoQuery: "jeff nippard lat pulldown form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Covers lats + biceps in one movement — that's why it earns a spot in a minimalist plan. Full stretch at top.", target: "Lats, Biceps", warmup: [{ pct: 60, reps: 5, label: "60%" }], warmupNote: "One ramp set is enough — you're already warm from pressing. Use it to find the stretch at the top before the load goes on." },
+      { name: "Hack Squat or Leg Press", videoQuery: "jeff nippard hack squat form", sets: 3, reps: "6–8", rir: "2", rest: "3 min", note: "Cycling hits quads but never under heavy tension at depth. One loaded movement covers what the bike misses. Go deep.", target: "Quads, Glutes", warmup: [{ pct: 50, reps: 8, label: "50%" }, { pct: 75, reps: 4, label: "75%" }], warmupNote: "First loaded lower-body pattern of the week, on cold hips and knees after two upper-body movements. Two ramp sets, both taken to full working depth." },
+      { name: "Machine Shoulder Press", videoQuery: "jeff nippard machine shoulder press form", sets: 2, reps: "6–8", rir: "2", rest: "2 min", note: "Two hard sets is enough on top of all the chest pressing. Full lockout, no shrugging.", target: "Delts, Triceps", warmup: [{ pct: 60, reps: 5, label: "60%" }], warmupNote: "Delts and triceps are already warm from the chest press. One ramp set to set the seat height and find the groove." },
+      { name: "Cable Lateral Raise", videoQuery: "jeff nippard cable lateral raise form", sets: 2, reps: "10–12", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: hit 10–12 to failure, immediately drop the pin ~25–30% and go again to failure, then drop once more. ~5s between drops. Side delts get zero work from your compounds — this is their only direct stimulus.", note: "Side delts are the one muscle your pressing barely touches. Strict form, lead with the elbow, no swinging.", target: "Medial Delt", warmup: [], warmupNote: "No warm-up sets. Light single-joint work on an already-warm muscle — the first working set is its own ramp." },
     ],
   },
   {
     id: "B", label: "Day B", focus: "Full Body B", sub: "Incline · Row · Hinge", color: "#3a7de0",
     exercises: [
-      { name: "Incline Machine Press", videoQuery: "jeff nippard incline machine press form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Upper-chest emphasis to complement Day A's flat press. 30–45° incline.", target: "Upper Chest, Anterior Delt, Triceps" },
-      { name: "Seated Cable Row (neutral, close)", videoQuery: "jeff nippard seated cable row form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Horizontal pull to balance Day A's vertical pulldown. Drives mid-back + biceps. Don't swing the torso.", target: "Mid-back, Lats, Biceps, Rear Delt" },
-      { name: "Lying Leg Curl Machine", videoQuery: "jeff nippard lying leg curl form", sets: 3, reps: "6–8", rir: "1–2", rest: "2 min", note: "Cycling is quad-dominant and starves the hamstrings. This is their main work for the week.", target: "Hamstrings" },
-      { name: "Cable Pull-Through (rope)", videoQuery: "jeff nippard cable pull through form", sets: 2, reps: "8–10", rir: "2", rest: "2 min", note: "Hip-hinge for glutes — the other thing cycling skips. Strict hinge, not a squat. Slightly higher reps to spare the lower back.", target: "Glutes, Hamstrings, Erectors" },
-      { name: "Cable Curl (EZ or straight bar)", videoQuery: "jeff nippard cable curl ez bar form", sets: 2, reps: "8–10", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: curl to failure, drop the pin ~30% and continue to failure, drop once more. Cables make the load swap instant — ideal for this. Balances the arm work, since biceps get less compound exposure than triceps.", note: "Cables hold tension at the bottom where dumbbells go slack. Supinate fully, keep the shoulders still.", target: "Biceps" },
+      { name: "Incline Machine Press", videoQuery: "jeff nippard incline machine press form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Upper-chest emphasis to complement Day A's flat press. 30–45° incline.", target: "Upper Chest, Anterior Delt, Triceps", warmup: [{ pct: 50, reps: 8, label: "50%" }, { pct: 75, reps: 4, label: "75%" }], warmupNote: "First movement of the session — two ramp sets to warm the shoulder joint at the incline angle before the working weight." },
+      { name: "Seated Cable Row (neutral, close)", videoQuery: "jeff nippard seated cable row form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Horizontal pull to balance Day A's vertical pulldown. Drives mid-back + biceps. Don't swing the torso.", target: "Mid-back, Lats, Biceps, Rear Delt", warmup: [{ pct: 60, reps: 5, label: "60%" }], warmupNote: "Already warm from pressing. One ramp set to set the foot position and rehearse keeping the torso still." },
+      { name: "Lying Leg Curl Machine", videoQuery: "jeff nippard lying leg curl form", sets: 3, reps: "6–8", rir: "1–2", rest: "2 min", note: "Cycling is quad-dominant and starves the hamstrings. This is their main work for the week.", target: "Hamstrings", warmup: [{ pct: 50, reps: 8, label: "50%" }], warmupNote: "Single-joint, so it skips the full two-set ramp — but it's the first loaded lower-body work of the day and hamstrings are cold from cycling and sitting. One ramp set before going heavy at 6–8." },
+      { name: "Cable Pull-Through (rope)", videoQuery: "jeff nippard cable pull through form", sets: 2, reps: "8–10", rir: "2", rest: "2 min", note: "Hip-hinge for glutes — the other thing cycling skips. Strict hinge, not a squat. Slightly higher reps to spare the lower back.", target: "Glutes, Hamstrings, Erectors", warmup: [{ pct: 50, reps: 8, label: "50%" }], warmupNote: "One light hinge to groove the pattern and warm the lower back. Position matters more than load here." },
+      { name: "Cable Curl (EZ or straight bar)", videoQuery: "jeff nippard cable curl ez bar form", sets: 2, reps: "8–10", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: curl to failure, drop the pin ~30% and continue to failure, drop once more. Cables make the load swap instant — ideal for this. Balances the arm work, since biceps get less compound exposure than triceps.", note: "Cables hold tension at the bottom where dumbbells go slack. Supinate fully, keep the shoulders still.", target: "Biceps", warmup: [], warmupNote: "No warm-up sets. Biceps already took heavy indirect work from the row; the first working set ramps them the rest of the way." },
     ],
   },
 ];
@@ -73,6 +73,15 @@ const principles = [
 ];
 
 function key(dayId, exIdx, setIdx) { return `${dayId}-${exIdx}-${setIdx}`; }
+function dayKeys(map, dayId) { return Object.keys(map).filter((k) => k.startsWith(`${dayId}-`)); }
+function hasData(map, dayId) {
+  const ks = dayId ? dayKeys(map, dayId) : Object.keys(map);
+  return ks.some((k) => map[k] && (map[k].weight || map[k].reps));
+}
+function isBackup(d) {
+  return !!d && typeof d === "object" && !Array.isArray(d) &&
+    (Array.isArray(d.history) || (d.current && typeof d.current === "object"));
+}
 
 // localStorage helpers — synchronous, work in any real browser
 function loadJSON(k, fallback) {
@@ -93,10 +102,15 @@ function Routine() {
   const [notice, setNotice] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
+  const noticeTimer = useRef(null);
 
   const day = days.find((d) => d.id === activeDay);
 
-  function flash(msg) { setNotice(msg); setTimeout(() => setNotice(""), 2600); }
+  function flash(msg) {
+    setNotice(msg);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(""), 2600);
+  }
 
   function updateLog(dayId, exIdx, setIdx, field, value) {
     const k = key(dayId, exIdx, setIdx);
@@ -111,15 +125,24 @@ function Routine() {
     return Object.keys(logs).some((k) => k.startsWith(`${dayId}-${exIdx}-`) && (logs[k]?.weight || logs[k]?.reps));
   }
   function clearLogs() { localStorage.removeItem(STORE_LOGS); setLogs({}); }
+  function clearDay(dayId) {
+    setLogs((prev) => {
+      const next = {};
+      Object.keys(prev).forEach((k) => { if (!k.startsWith(`${dayId}-`)) next[k] = prev[k]; });
+      saveJSON(STORE_LOGS, next);
+      return next;
+    });
+  }
 
   function persistHistory(next) { setHistory(next); saveJSON(STORE_HISTORY, next); }
 
   function finishSession() {
-    const hasData = Object.values(logs).some((v) => v && (v.weight || v.reps));
-    if (!hasData) { flash("Nothing logged yet — fill in some sets first."); return; }
-    const session = { id: Date.now(), date: new Date().toISOString(), dayId: activeDay, focus: day.focus, entries: JSON.parse(JSON.stringify(logs)) };
+    if (!hasData(logs, activeDay)) { flash(`Nothing logged for ${day.focus} yet — fill in some sets first.`); return; }
+    const entries = {};
+    dayKeys(logs, activeDay).forEach((k) => { entries[k] = { ...logs[k] }; });
+    const session = { id: Date.now(), date: new Date().toISOString(), dayId: activeDay, focus: day.focus, entries };
     persistHistory([session, ...history]);
-    clearLogs();
+    clearDay(activeDay);
     flash(`Saved ${day.focus} to history. Sheet cleared.`);
     setView("history");
   }
@@ -144,17 +167,21 @@ function Routine() {
   }
 
   function applyImport(data) {
+    if (!isBackup(data)) { flash("That doesn't look like a workout backup."); return; }
     const importedHistory = Array.isArray(data.history) ? data.history : [];
     const importedCurrent = data.current && typeof data.current === "object" ? data.current : {};
+    const validSessions = importedHistory.filter(
+      (s) => s && typeof s === "object" && s.id != null && s.entries && typeof s.entries === "object"
+    );
     const byId = {};
-    [...importedHistory, ...history].forEach((s) => { if (s && s.id) byId[s.id] = s; });
+    [...validSessions, ...history].forEach((s) => { if (s && s.id) byId[s.id] = s; });
     const merged = Object.values(byId).sort((a, b) => new Date(b.date) - new Date(a.date));
     persistHistory(merged);
-    const currentHasData = Object.values(logs).some((v) => v && (v.weight || v.reps));
-    if (!currentHasData && Object.keys(importedCurrent).length) {
+    if (!hasData(logs) && Object.keys(importedCurrent).length) {
       setLogs(importedCurrent); saveJSON(STORE_LOGS, importedCurrent);
     }
-    flash(`Imported ${importedHistory.length} session(s).`);
+    const added = merged.length - history.length;
+    flash(`Imported ${added} new session${added === 1 ? "" : "s"} · ${validSessions.length - added} already present.`);
     setImportOpen(false); setImportText(""); setView("history");
   }
 
@@ -185,13 +212,16 @@ function Routine() {
   function sessionSummary(session) {
     const d = days.find((x) => x.id === session.dayId);
     if (!d) return [];
+    const entries = session.entries || {};
+    const rank = (k) => (k[0] === "d" ? 100 + Number(k.slice(1)) : Number(k));
     return d.exercises.map((ex, i) => {
       const sets = [];
-      Object.keys(session.entries).filter((k) => k.startsWith(`${session.dayId}-${i}-`)).forEach((k) => {
+      Object.keys(entries).filter((k) => k.startsWith(`${session.dayId}-${i}-`)).forEach((k) => {
         const setKey = k.split("-").slice(2).join("-");
-        const v = session.entries[k];
+        const v = entries[k];
         if (v && (v.weight || v.reps)) sets.push({ setKey, ...v });
       });
+      sets.sort((a, b) => rank(a.setKey) - rank(b.setKey));
       return { name: ex.name, sets };
     }).filter((ex) => ex.sets.length > 0);
   }
@@ -222,8 +252,8 @@ function Routine() {
                 <button onClick={exportData} style={btn()}>↓ export</button>
                 <button onClick={() => setImportOpen(true)} style={btn()}>↑ import</button>
               </div>
-              {Object.keys(logs).length > 0 && (
-                <button onClick={clearLogs} style={btn("#2a1a1a", "#6b3030")}>clear sheet</button>
+              {hasData(logs) && (
+                <button onClick={() => { if (window.confirm("Clear the current sheet? Logged sets that haven't been saved to history will be lost.")) clearLogs(); }} style={btn("#2a1a1a", "#6b3030")}>clear sheet</button>
               )}
             </div>
           </div>
@@ -334,6 +364,23 @@ function Routine() {
                         </div>
                       </div>
 
+                      {ex.warmupNote && (
+                        <div style={{ background: "#0e0f11", border: "1px solid #1e2025", borderRadius: 6, padding: "10px 12px", marginBottom: 16 }}>
+                          <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: "#444", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>warm-up</div>
+                          {(ex.warmup || []).map((w, wi) => {
+                            const top = Number(getLog(day.id, i, 0).weight);
+                            const load = top > 0 ? Math.round((top * w.pct) / 100 / 5) * 5 : 0;
+                            return (
+                              <div key={wi} style={{ display: "flex", justifyContent: "space-between", fontFamily: "'DM Mono'", fontSize: 12, color: "#999", marginBottom: 4 }}>
+                                <span style={{ color: "#555" }}>W{wi + 1} · {w.label}</span>
+                                <span>{load > 0 ? `${load} lb × ${w.reps}` : `× ${w.reps}`}</span>
+                              </div>
+                            );
+                          })}
+                          <div style={{ fontSize: 12, color: "#666", lineHeight: 1.5, marginTop: (ex.warmup || []).length ? 6 : 0 }}>{ex.warmupNote}</div>
+                        </div>
+                      )}
+
                       {ex.dropSet && (
                         <div style={{ background: day.color + "12", border: `1px solid ${day.color}33`, borderRadius: 6, padding: "10px 12px", marginBottom: 16 }}>
                           <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: day.color, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>⬇ drop set protocol</div>
@@ -355,8 +402,8 @@ function Routine() {
                             return (
                               <React.Fragment key={`set-${s}`}>
                                 <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#555" }}>{isDropTop ? "S" + (s + 1) + " ⬇" : "S" + (s + 1)}</div>
-                                <input type="number" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
-                                <input type="number" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="text" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="text" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
                               </React.Fragment>
                             );
                           })}
@@ -367,8 +414,8 @@ function Routine() {
                             return (
                               <React.Fragment key={`drop-${dk}`}>
                                 <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#555", paddingLeft: 12 }}>↳ d{di + 1}</div>
-                                <input type="number" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
-                                <input type="number" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="text" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="text" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
                               </React.Fragment>
                             );
                           })}
@@ -389,7 +436,7 @@ function Routine() {
 
           <div style={{ marginTop: 28, background: "#111317", border: "1px solid #1c1e24", borderRadius: 8, padding: "16px" }}>
             <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 12 }}>Weekly direct sets per muscle</div>
-            {[{ muscle: "Chest", sets: 6, color: "#e05c3a" }, { muscle: "Back / Lats", sets: 6, color: "#3a7de0" }, { muscle: "Shoulders (medial)", sets: 4, color: "#9b59b6" }, { muscle: "Biceps", sets: 2, color: "#3a7de0" }, { muscle: "Quads", sets: 3, color: "#3aa87d" }, { muscle: "Hams / Glutes", sets: 5, color: "#3aa87d" }].map(({ muscle, sets, color }) => (
+            {[{ muscle: "Chest", sets: 6, color: "#e05c3a" }, { muscle: "Back / Lats", sets: 6, color: "#3a7de0" }, { muscle: "Shoulders (medial)", sets: 2, color: "#9b59b6" }, { muscle: "Biceps", sets: 2, color: "#3a7de0" }, { muscle: "Quads", sets: 3, color: "#3aa87d" }, { muscle: "Hams / Glutes", sets: 5, color: "#3aa87d" }].map(({ muscle, sets, color }) => (
               <div key={muscle} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <div style={{ width: 140, fontSize: 12, color: "#777" }}>{muscle}</div>
                 <div style={{ flex: 1, background: "#1a1c22", borderRadius: 3, height: 6, overflow: "hidden" }}><div style={{ width: `${(sets / 8) * 100}%`, height: "100%", background: color, borderRadius: 3 }} /></div>
@@ -457,13 +504,13 @@ function Routine() {
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                               {ex.sets.map((s, si) => (
                                 <span key={si} style={{ fontFamily: "'DM Mono'", fontSize: 11.5, color: "#999", background: "#0e0f11", border: "1px solid #222", borderRadius: 4, padding: "3px 8px" }}>
-                                  <span style={{ color: "#555" }}>{s.setKey.startsWith("d") ? "↳" + s.setKey : s.setKey.toUpperCase()}</span> {s.weight || "—"}<span style={{ color: "#444" }}>lb</span> × {s.reps || "—"}
+                                  <span style={{ color: "#555" }}>{s.setKey.startsWith("d") ? "↳" + s.setKey : "S" + (Number(s.setKey) + 1)}</span> {s.weight || "—"}<span style={{ color: "#444" }}>lb</span> × {s.reps || "—"}
                                 </span>
                               ))}
                             </div>
                           </div>
                         ))}
-                        <button onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }} style={{ marginTop: 14, ...btn("#2a1a1a", "#6b3030") }}>delete session</button>
+                        <button onClick={(e) => { e.stopPropagation(); if (!window.confirm(`Delete ${session.focus} from ${fmtDate(session.date)}? This can't be undone.`)) return; deleteSession(session.id); }} style={{ marginTop: 14, ...btn("#2a1a1a", "#6b3030") }}>delete session</button>
                       </div>
                     )}
                   </div>

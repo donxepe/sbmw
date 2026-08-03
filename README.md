@@ -82,9 +82,9 @@ duplicate sessions.
 
 Everything is data-driven. Open `index.html` and edit the `days` array near the top —
 exercise names, sets, reps, RIR, rest, coaching notes, `dropSet` flags, and the
-`videoQuery` used for the YouTube form-video link. If you edit the app, bump the
-`CACHE` version string in `sw.js` (e.g. `-v1` → `-v2`) so phones pick up the new version
-instead of serving the old cached one.
+`videoQuery` used for the YouTube form-video link. You don't need to touch the `CACHE`
+version in `sw.js` — the GitHub Pages deploy stamps it with a hash of the app files, so a
+phone always picks up a changed app instead of serving the old cached one.
 
 ## Optional: a "real" build later
 
