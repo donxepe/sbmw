@@ -39,8 +39,14 @@ const { useState, useRef } = React;
 
 const STORE_LOGS = "workout-logs-min";
 const STORE_HISTORY = "workout-history-min";
+const STORE_PERSON = "workout-active-person";
+const DEFAULT_PERSON = "luis";
 
-const days = [
+// Luis keeps the original, unsuffixed keys — his existing data is never migrated or moved.
+function logsKey(id)    { return id === DEFAULT_PERSON ? STORE_LOGS    : `${STORE_LOGS}-${id}`; }
+function historyKey(id) { return id === DEFAULT_PERSON ? STORE_HISTORY : `${STORE_HISTORY}-${id}`; }
+
+const daysLuis = [
   {
     id: "A", label: "Day A", focus: "Full Body A", sub: "Press · Pull · Squat", color: "#e05c3a",
     exercises: [
@@ -63,13 +69,68 @@ const days = [
   },
 ];
 
-const principles = [
-  { icon: "✂️", title: "Minimum Effective Dose", body: "The first few hard sets per muscle deliver most of the growth. This plan harvests the high-yield part of the curve and skips the low-yield tail." },
-  { icon: "🎯", title: "Effort Over Volume", body: "Fewer sets means each must count. RIR 1–2 on compounds, true failure on the drop sets — half-effort sets waste a minimalist plan." },
-  { icon: "🧩", title: "Compound Bias", body: "4 of 5 movements per session are multi-joint, so each trains several muscles. That's how 5 exercises can cover the whole body." },
-  { icon: "⬇️", title: "Drop Sets = Time Efficiency", body: "Evidence (Sødal 2023; Coleman 2022 meta-analyses): comparable hypertrophy to traditional sets in 1/2–1/3 the time. Used here on the final isolation only." },
-  { icon: "🚴", title: "Cycling Supplement", body: "Your commute covers aerobic work + quad exposure, so legs need only one quad and one hamstring/glute movement across the week." },
-  { icon: "📅", title: "Scale Up Later", body: "If growth stalls after ~8–12 weeks, add volume to lagging muscles or a 3rd day — don't inflate everything at once." },
+const daysLiz = [
+  {
+    id: "A", label: "Day A", focus: "Full Body A", sub: "Squat · Press · Pull", color: "#e05c3a",
+    exercises: [
+      { name: "Hack Squat or Leg Press", videoQuery: "jeff nippard hack squat form", sets: 3, reps: "6–8", rir: "2", rest: "3 min", note: "Legs lead the session because nothing else in your week loads them. Go deep — the bottom half is where the quads actually grow.", target: "Quads, Glutes", warmup: [{ pct: 50, reps: 8, label: "50%" }, { pct: 75, reps: 4, label: "75%" }], warmupNote: "First movement of the session, on cold hips and knees. Two ramp sets, both taken to full working depth so the depth is rehearsed before the load is real. ~60s between them; these aren't working sets and don't count toward volume." },
+      { name: "Chest Press Machine", videoQuery: "jeff nippard chest press machine form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Your main pressing movement. Adjust seat so handles align with lower chest. Aggressive press, controlled lowering.", target: "Chest, Anterior Delt, Triceps", warmup: [{ pct: 50, reps: 8, label: "50%" }, { pct: 75, reps: 4, label: "75%" }], warmupNote: "Legs are warm but the shoulders and elbows haven't done anything yet — this is the first upper-body pattern of the day, so it gets the full two ramp sets." },
+      { name: "Lat Pulldown (wide grip)", videoQuery: "jeff nippard lat pulldown form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Covers lats + biceps in one movement — that's why it earns a spot in a minimalist plan. Full stretch at top.", target: "Lats, Biceps", warmup: [{ pct: 60, reps: 5, label: "60%" }], warmupNote: "One ramp set is enough — you're already warm from pressing. Use it to find the stretch at the top before the load goes on." },
+      { name: "Leg Extension", videoQuery: "jeff nippard leg extension form", sets: 2, reps: "10–12", rir: "1–2", rest: "90 sec", note: "Direct quad work to top up what the hack squat started. Pause a beat at the top, lower slowly — this one is about tension, not load.", target: "Quads", warmup: [], warmupNote: "No warm-up sets. Single-joint work on quads that are already warm from the hack squat — the first working set is its own ramp." },
+      { name: "Cable Lateral Raise", videoQuery: "jeff nippard cable lateral raise form", sets: 2, reps: "10–12", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: hit 10–12 to failure, immediately drop the pin ~25–30% and go again to failure, then drop once more. ~5s between drops. Side delts get zero work from your compounds — this is their only direct stimulus.", note: "Side delts are the one muscle your pressing barely touches. Strict form, lead with the elbow, no swinging.", target: "Medial Delt", warmup: [], warmupNote: "No warm-up sets. Light single-joint work on an already-warm muscle — the first working set is its own ramp." },
+    ],
+  },
+  {
+    id: "B", label: "Day B", focus: "Full Body B", sub: "Hinge · Press · Row", color: "#3a7de0",
+    exercises: [
+      { name: "Hip Thrust (machine or barbell)", videoQuery: "jeff nippard hip thrust form", sets: 3, reps: "8–10", rir: "1–2", rest: "3 min", note: "The highest-yield glute movement there is. Chin tucked, ribs down, drive through the heels and hold the top for a beat.", target: "Glutes, Hamstrings", warmup: [{ pct: 50, reps: 8, label: "50%" }, { pct: 75, reps: 4, label: "75%" }], warmupNote: "First movement of the session and the first loaded hinge of the week, on cold hips. Two ramp sets — the second at working height to groove the bar path and the top-end squeeze." },
+      { name: "Incline Machine Press", videoQuery: "jeff nippard incline machine press form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Upper-chest emphasis to complement Day A's flat press. 30–45° incline.", target: "Upper Chest, Anterior Delt, Triceps", warmup: [{ pct: 50, reps: 8, label: "50%" }, { pct: 75, reps: 4, label: "75%" }], warmupNote: "First upper-body pattern of the day — hips are warm, shoulders aren't. Two ramp sets to warm the shoulder joint at the incline angle before the working weight." },
+      { name: "Seated Cable Row (neutral, close)", videoQuery: "jeff nippard seated cable row form", sets: 3, reps: "6–8", rir: "1–2", rest: "3 min", note: "Horizontal pull to balance Day A's vertical pulldown. Drives mid-back + biceps. Don't swing the torso.", target: "Mid-back, Lats, Biceps, Rear Delt", warmup: [{ pct: 60, reps: 5, label: "60%" }], warmupNote: "Already warm from pressing. One ramp set to set the foot position and rehearse keeping the torso still." },
+      { name: "Lying Leg Curl Machine", videoQuery: "jeff nippard lying leg curl form", sets: 3, reps: "6–8", rir: "1–2", rest: "2 min", note: "Hip thrusts train the hamstrings at the hip; this trains them at the knee. Both are needed — that's why it keeps a slot.", target: "Hamstrings", warmup: [{ pct: 50, reps: 8, label: "50%" }], warmupNote: "Knee flexion is a different pattern from the hip thrust, so the hamstrings are only half warm. One ramp set before going heavy at 6–8." },
+      { name: "Cable Curl (EZ or straight bar)", videoQuery: "jeff nippard cable curl ez bar form", sets: 2, reps: "8–10", rir: "1 → 0", rest: "90 sec", dropSet: true, dropNote: "Final set is a drop set: curl to failure, drop the pin ~30% and continue to failure, drop once more. Cables make the load swap instant — ideal for this. Balances the arm work, since biceps get less compound exposure than triceps.", note: "Cables hold tension at the bottom where dumbbells go slack. Supinate fully, keep the shoulders still.", target: "Biceps", warmup: [], warmupNote: "No warm-up sets. Biceps already took heavy indirect work from the row; the first working set ramps them the rest of the way." },
+    ],
+  },
+];
+
+const P = {
+  minEffectiveDose: { icon: "✂️", title: "Minimum Effective Dose", body: "The first few hard sets per muscle deliver most of the growth. This plan harvests the high-yield part of the curve and skips the low-yield tail." },
+  effortOverVolume: { icon: "🎯", title: "Effort Over Volume", body: "Fewer sets means each must count. RIR 1–2 on compounds, true failure on the drop sets — half-effort sets waste a minimalist plan." },
+  compoundBias:     { icon: "🧩", title: "Compound Bias", body: "4 of 5 movements per session are multi-joint, so each trains several muscles. That's how 5 exercises can cover the whole body." },
+  compoundBiasLiz:  { icon: "🧩", title: "Compound Bias", body: "3 of 5 movements per session are multi-joint, so each trains several muscles. The two isolations are spent exactly where the compounds leave a gap." },
+  dropSets:         { icon: "⬇️", title: "Drop Sets = Time Efficiency", body: "Evidence (Sødal 2023; Coleman 2022 meta-analyses): comparable hypertrophy to traditional sets in 1/2–1/3 the time. Used here on the final isolation only." },
+  cycling:          { icon: "🚴", title: "Cycling Supplement", body: "Your commute covers aerobic work + quad exposure, so legs need only one quad and one hamstring/glute movement across the week." },
+  legsLead:         { icon: "🦵", title: "Legs Lead", body: "No bike commute means nothing else in the week loads your legs, so each session opens with a lower-body movement while you're freshest: a squat pattern on Day A, a hip hinge on Day B." },
+  scaleUp:          { icon: "📅", title: "Scale Up Later", body: "If growth stalls after ~8–12 weeks, add volume to lagging muscles or a 3rd day — don't inflate everything at once." },
+};
+
+const people = [
+  {
+    id: "luis", name: "Luis", color: "#e05c3a", days: daysLuis,
+    principles: [P.minEffectiveDose, P.effortOverVolume, P.compoundBias, P.dropSets, P.cycling, P.scaleUp],
+    weeklySets: [
+      { muscle: "Chest", sets: 6, color: "#e05c3a" },
+      { muscle: "Back / Lats", sets: 6, color: "#3a7de0" },
+      { muscle: "Shoulders (medial)", sets: 2, color: "#9b59b6" },
+      { muscle: "Biceps", sets: 2, color: "#3a7de0" },
+      { muscle: "Quads", sets: 3, color: "#3aa87d" },
+      { muscle: "Hams / Glutes", sets: 5, color: "#3aa87d" },
+    ],
+    volumeNote: "Deliberately lean. Triceps are covered by the 3 weekly presses; biceps get heavy indirect work from pulldowns + rows on top of the direct curl.",
+  },
+  {
+    id: "liz", name: "Liz", color: "#9b59b6", days: daysLiz,
+    principles: [P.minEffectiveDose, P.effortOverVolume, P.compoundBiasLiz, P.dropSets, P.legsLead, P.scaleUp],
+    weeklySets: [
+      { muscle: "Chest", sets: 6, color: "#e05c3a" },
+      { muscle: "Back / Lats", sets: 6, color: "#3a7de0" },
+      { muscle: "Shoulders (medial)", sets: 2, color: "#9b59b6" },
+      { muscle: "Biceps", sets: 2, color: "#3a7de0" },
+      { muscle: "Quads", sets: 5, color: "#3aa87d" },
+      { muscle: "Glutes", sets: 3, color: "#3aa87d" },
+      { muscle: "Hamstrings", sets: 3, color: "#3aa87d" },
+    ],
+    volumeNote: "No bike commute, so legs get real loaded work: a squat pattern plus direct quad work on Day A, a hip hinge plus direct hamstring work on Day B. Triceps are covered by the 2 weekly presses; biceps get heavy indirect work from the pulldown + row on top of the direct curl.",
+  },
 ];
 
 function key(dayId, exIdx, setIdx) { return `${dayId}-${exIdx}-${setIdx}`; }
@@ -80,7 +141,8 @@ function hasData(map, dayId) {
 }
 function isBackup(d) {
   return !!d && typeof d === "object" && !Array.isArray(d) &&
-    (Array.isArray(d.history) || (d.current && typeof d.current === "object"));
+    ((!!d.people && typeof d.people === "object" && !Array.isArray(d.people)) ||
+     Array.isArray(d.history) || (!!d.current && typeof d.current === "object"));
 }
 
 // localStorage helpers — synchronous, work in any real browser
@@ -95,8 +157,12 @@ function saveJSON(k, val) {
 function Routine() {
   const [activeDay, setActiveDay] = useState("A");
   const [expanded, setExpanded] = useState(null);
-  const [logs, setLogs] = useState(() => loadJSON(STORE_LOGS, {}));
-  const [history, setHistory] = useState(() => loadJSON(STORE_HISTORY, []));
+  const [personId, setPersonId] = useState(() => {
+    const saved = loadJSON(STORE_PERSON, DEFAULT_PERSON);
+    return people.some((p) => p.id === saved) ? saved : DEFAULT_PERSON;
+  });
+  const [logs, setLogs] = useState(() => loadJSON(logsKey(personId), {}));
+  const [history, setHistory] = useState(() => loadJSON(historyKey(personId), []));
   const [view, setView] = useState("workout");
   const [expandedSession, setExpandedSession] = useState(null);
   const [notice, setNotice] = useState("");
@@ -104,7 +170,8 @@ function Routine() {
   const [importText, setImportText] = useState("");
   const noticeTimer = useRef(null);
 
-  const day = days.find((d) => d.id === activeDay);
+  const person = people.find((p) => p.id === personId) || people[0];
+  const day = person.days.find((d) => d.id === activeDay) || person.days[0];
 
   function flash(msg) {
     setNotice(msg);
@@ -112,11 +179,23 @@ function Routine() {
     noticeTimer.current = setTimeout(() => setNotice(""), 2600);
   }
 
+  function switchPerson(id) {
+    if (id === personId) return;
+    setPersonId(id);
+    saveJSON(STORE_PERSON, id);
+    setLogs(loadJSON(logsKey(id), {}));
+    setHistory(loadJSON(historyKey(id), []));
+    setActiveDay("A");
+    setExpanded(null);
+    setExpandedSession(null);
+    setView("workout");
+  }
+
   function updateLog(dayId, exIdx, setIdx, field, value) {
     const k = key(dayId, exIdx, setIdx);
     setLogs((prev) => {
       const next = { ...prev, [k]: { ...prev[k], [field]: value } };
-      saveJSON(STORE_LOGS, next);
+      saveJSON(logsKey(personId), next);
       return next;
     });
   }
@@ -124,33 +203,38 @@ function Routine() {
   function hasAnyLog(dayId, exIdx) {
     return Object.keys(logs).some((k) => k.startsWith(`${dayId}-${exIdx}-`) && (logs[k]?.weight || logs[k]?.reps));
   }
-  function clearLogs() { localStorage.removeItem(STORE_LOGS); setLogs({}); }
+  function clearLogs() { localStorage.removeItem(logsKey(personId)); setLogs({}); }
   function clearDay(dayId) {
     setLogs((prev) => {
       const next = {};
       Object.keys(prev).forEach((k) => { if (!k.startsWith(`${dayId}-`)) next[k] = prev[k]; });
-      saveJSON(STORE_LOGS, next);
+      saveJSON(logsKey(personId), next);
       return next;
     });
   }
 
-  function persistHistory(next) { setHistory(next); saveJSON(STORE_HISTORY, next); }
+  function persistHistory(next) { setHistory(next); saveJSON(historyKey(personId), next); }
 
   function finishSession() {
     if (!hasData(logs, activeDay)) { flash(`Nothing logged for ${day.focus} yet — fill in some sets first.`); return; }
     const entries = {};
     dayKeys(logs, activeDay).forEach((k) => { entries[k] = { ...logs[k] }; });
-    const session = { id: Date.now(), date: new Date().toISOString(), dayId: activeDay, focus: day.focus, entries };
+    const session = { id: Date.now(), date: new Date().toISOString(), personId, dayId: activeDay, focus: day.focus, entries };
     persistHistory([session, ...history]);
     clearDay(activeDay);
-    flash(`Saved ${day.focus} to history. Sheet cleared.`);
+    flash(`Saved ${day.focus} to ${person.name}'s history. Sheet cleared.`);
     setView("history");
   }
   function deleteSession(id) { persistHistory(history.filter((s) => s.id !== id)); }
 
   // Real file download — works in any browser
   function exportData() {
-    const payload = { app: "minimalist-full-body", version: 1, exportedAt: new Date().toISOString(), current: logs, history };
+    const payload = { app: "minimalist-full-body", version: 2, exportedAt: new Date().toISOString(), people: {} };
+    people.forEach((p) => {
+      payload.people[p.id] = p.id === personId
+        ? { current: logs, history }
+        : { current: loadJSON(logsKey(p.id), {}), history: loadJSON(historyKey(p.id), []) };
+    });
     const json = JSON.stringify(payload, null, 2);
     try {
       const blob = new Blob([json], { type: "application/json" });
@@ -160,28 +244,51 @@ function Routine() {
       a.download = `workout-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      flash("Backup downloaded.");
+      flash("Backup downloaded — all profiles.");
     } catch (_) {
       navigator.clipboard?.writeText(json).then(() => flash("Copied backup to clipboard.")).catch(() => flash("Export failed."));
     }
   }
 
-  function applyImport(data) {
-    if (!isBackup(data)) { flash("That doesn't look like a workout backup."); return; }
-    const importedHistory = Array.isArray(data.history) ? data.history : [];
-    const importedCurrent = data.current && typeof data.current === "object" ? data.current : {};
-    const validSessions = importedHistory.filter(
+  function mergeHistory(existing, incoming) {
+    const valid = (Array.isArray(incoming) ? incoming : []).filter(
       (s) => s && typeof s === "object" && s.id != null && s.entries && typeof s.entries === "object"
     );
     const byId = {};
-    [...validSessions, ...history].forEach((s) => { if (s && s.id) byId[s.id] = s; });
-    const merged = Object.values(byId).sort((a, b) => new Date(b.date) - new Date(a.date));
-    persistHistory(merged);
-    if (!hasData(logs) && Object.keys(importedCurrent).length) {
-      setLogs(importedCurrent); saveJSON(STORE_LOGS, importedCurrent);
-    }
-    const added = merged.length - history.length;
-    flash(`Imported ${added} new session${added === 1 ? "" : "s"} · ${validSessions.length - added} already present.`);
+    [...valid, ...existing].forEach((s) => { if (s && s.id) byId[s.id] = s; });
+    return { merged: Object.values(byId).sort((a, b) => new Date(b.date) - new Date(a.date)), seen: valid.length };
+  }
+
+  function applyImport(data) {
+    if (!isBackup(data)) { flash("That doesn't look like a workout backup."); return; }
+
+    // v2: { people: { id: {current, history} } }. v1: { current, history } → Luis.
+    const buckets = data.people && typeof data.people === "object" && !Array.isArray(data.people)
+      ? data.people
+      : { [DEFAULT_PERSON]: { current: data.current, history: data.history } };
+
+    let added = 0, dup = 0, skipped = 0;
+    Object.keys(buckets).forEach((pid) => {
+      if (!people.some((p) => p.id === pid)) { skipped++; return; }
+      const bucket = buckets[pid] || {};
+      const isActive = pid === personId;
+
+      const existingHistory = isActive ? history : loadJSON(historyKey(pid), []);
+      const { merged, seen } = mergeHistory(existingHistory, bucket.history);
+      const gained = merged.length - existingHistory.length;
+      added += gained; dup += seen - gained;
+      saveJSON(historyKey(pid), merged);
+      if (isActive) setHistory(merged);
+
+      const incoming = bucket.current && typeof bucket.current === "object" ? bucket.current : {};
+      const live = isActive ? logs : loadJSON(logsKey(pid), {});
+      if (!hasData(live) && Object.keys(incoming).length) {
+        saveJSON(logsKey(pid), incoming);
+        if (isActive) setLogs(incoming);
+      }
+    });
+
+    flash(`Imported ${added} new session${added === 1 ? "" : "s"} · ${dup} already present${skipped ? ` · skipped ${skipped} unknown profile${skipped === 1 ? "" : "s"}` : ""}.`);
     setImportOpen(false); setImportText(""); setView("history");
   }
 
@@ -210,7 +317,7 @@ function Routine() {
   }
 
   function sessionSummary(session) {
-    const d = days.find((x) => x.id === session.dayId);
+    const d = person.days.find((x) => x.id === session.dayId);
     if (!d) return [];
     const entries = session.entries || {};
     const rank = (k) => (k[0] === "d" ? 100 + Number(k.slice(1)) : Number(k));
@@ -237,6 +344,20 @@ function Routine() {
       {/* Header */}
       <div style={{ borderBottom: "1px solid #1e2025", padding: "calc(28px + env(safe-area-inset-top)) 28px 24px" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+            {people.map((p) => {
+              const on = p.id === personId;
+              return (
+                <button key={p.id} onClick={() => switchPerson(p.id)} style={{
+                  background: on ? p.color + "18" : "none",
+                  border: `1px solid ${on ? p.color + "66" : "#2a2c33"}`,
+                  borderRadius: 999, color: on ? p.color : "#666",
+                  fontFamily: "'DM Mono'", fontSize: 11.5, fontWeight: on ? 500 : 400,
+                  cursor: "pointer", padding: "6px 16px", letterSpacing: "0.05em",
+                }}>{p.name}</button>
+              );
+            })}
+          </div>
           <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: "#555", letterSpacing: "0.15em", textTransform: "uppercase" }}>
             Minimalist · 2 days/week · Full body
           </span>
@@ -253,7 +374,7 @@ function Routine() {
                 <button onClick={() => setImportOpen(true)} style={btn()}>↑ import</button>
               </div>
               {hasData(logs) && (
-                <button onClick={() => { if (window.confirm("Clear the current sheet? Logged sets that haven't been saved to history will be lost.")) clearLogs(); }} style={btn("#2a1a1a", "#6b3030")}>clear sheet</button>
+                <button onClick={() => { if (window.confirm(`Clear ${person.name}'s current sheet? Logged sets that haven't been saved to history will be lost.`)) clearLogs(); }} style={btn("#2a1a1a", "#6b3030")}>clear sheet</button>
               )}
             </div>
           </div>
@@ -303,7 +424,7 @@ function Routine() {
       {view === "workout" && (<>
         <div style={{ borderBottom: "1px solid #1e2025", padding: "0 28px" }}>
           <div style={{ maxWidth: 720, margin: "0 auto", display: "flex" }}>
-            {days.map((d) => (
+            {person.days.map((d) => (
               <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
                 <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
               </button>
@@ -430,26 +551,26 @@ function Routine() {
           </div>
 
           <button onClick={finishSession} style={{ marginTop: 20, width: "100%", background: day.color + "16", border: `1px solid ${day.color}66`, color: day.color, fontFamily: "'DM Mono'", fontSize: 13, fontWeight: 500, cursor: "pointer", padding: "14px", borderRadius: 8, letterSpacing: "0.05em" }}>
-            ✓ Finish &amp; save {day.focus} to history
+            ✓ Finish &amp; save {day.focus} to {person.name}'s history
           </button>
           <div style={{ fontSize: 11, color: "#3f3f3f", marginTop: 8, textAlign: "center", lineHeight: 1.5 }}>Saves a dated snapshot, then clears the sheet for next time.</div>
 
           <div style={{ marginTop: 28, background: "#111317", border: "1px solid #1c1e24", borderRadius: 8, padding: "16px" }}>
             <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 12 }}>Weekly direct sets per muscle</div>
-            {[{ muscle: "Chest", sets: 6, color: "#e05c3a" }, { muscle: "Back / Lats", sets: 6, color: "#3a7de0" }, { muscle: "Shoulders (medial)", sets: 2, color: "#9b59b6" }, { muscle: "Biceps", sets: 2, color: "#3a7de0" }, { muscle: "Quads", sets: 3, color: "#3aa87d" }, { muscle: "Hams / Glutes", sets: 5, color: "#3aa87d" }].map(({ muscle, sets, color }) => (
+            {person.weeklySets.map(({ muscle, sets, color }) => (
               <div key={muscle} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <div style={{ width: 140, fontSize: 12, color: "#777" }}>{muscle}</div>
                 <div style={{ flex: 1, background: "#1a1c22", borderRadius: 3, height: 6, overflow: "hidden" }}><div style={{ width: `${(sets / 8) * 100}%`, height: "100%", background: color, borderRadius: 3 }} /></div>
                 <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: "#555", width: 28, textAlign: "right" }}>{sets}</div>
               </div>
             ))}
-            <div style={{ fontSize: 11, color: "#3f3f3f", marginTop: 10, fontStyle: "italic", lineHeight: 1.5 }}>Deliberately lean. Triceps are covered by the 3 weekly presses; biceps get heavy indirect work from pulldowns + rows on top of the direct curl.</div>
+            <div style={{ fontSize: 11, color: "#3f3f3f", marginTop: 10, fontStyle: "italic", lineHeight: 1.5 }}>{person.volumeNote}</div>
           </div>
 
           <div style={{ marginTop: 28, paddingBottom: 40 }}>
             <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 14 }}>Why this works</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {principles.map(({ icon, title, body }) => (
+              {person.principles.map(({ icon, title, body }) => (
                 <div key={title} style={{ background: "#111317", border: "1px solid #1c1e24", borderRadius: 8, padding: "12px 14px" }}>
                   <div style={{ fontSize: 16, marginBottom: 6 }}>{icon}</div>
                   <div style={{ fontSize: 13, fontWeight: 500, color: "#ccc", marginBottom: 4 }}>{title}</div>
@@ -477,7 +598,7 @@ function Routine() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {history.map((session) => {
-                const d = days.find((x) => x.id === session.dayId);
+                const d = person.days.find((x) => x.id === session.dayId);
                 const accent = d ? d.color : "#888";
                 const isOpen = expandedSession === session.id;
                 const summary = sessionSummary(session);
