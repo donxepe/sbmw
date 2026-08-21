@@ -35,7 +35,7 @@
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react">
-const { useState, useRef } = React;
+const { useState, useRef, useEffect, useMemo } = React;
 
 const STORE_LOGS = "workout-logs-min";
 const STORE_HISTORY = "workout-history-min";
@@ -145,6 +145,25 @@ function isBackup(d) {
      Array.isArray(d.history) || (!!d.current && typeof d.current === "object"));
 }
 
+// Progressive overload suggestion. `entries` is one finished session's logged sets
+// for a single exercise. Returns { lastWeight, lastReps, allDivBy5 } — the raw
+// building blocks. The caller combines these with the exercise's rep range:
+//   reps  → last session's best set (the set with the most reps) + 1; if that would
+//           exceed the exercise's max recommended rep, reset to the min instead.
+//   weight→ only on the weight-increase branch: +2 lb, or +5 when every logged
+//           weight for this exercise is divisible by 5.
+// When there's no usable history the exercise keeps { weight: "", reps: "" }.
+function suggestProgression(entries) {
+  if (!entries || typeof entries !== "object") return null;
+  const weights = [], bestReps = { v: -1, w: "" };
+  Object.values(entries).forEach((s) => {
+    if (s && s.weight) { const w = parseFloat(s.weight); if (!isNaN(w)) weights.push(w); }
+    if (s && s.reps) { const r = parseFloat(s.reps); if (!isNaN(r) && r > bestReps.v) { bestReps.v = r; bestReps.w = s.weight; } }
+  });
+  if (bestReps.v < 0) return null;
+  return { lastWeight: bestReps.w, lastReps: bestReps.v, allDivBy5: weights.length > 0 && weights.every((w) => w % 5 === 0) };
+}
+
 // localStorage helpers — synchronous, work in any real browser
 function loadJSON(k, fallback) {
   try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }
@@ -168,10 +187,23 @@ function Routine() {
   const [notice, setNotice] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
+  const [suggestions, setSuggestions] = useState(null);
   const noticeTimer = useRef(null);
 
   const person = people.find((p) => p.id === personId) || people[0];
   const day = person.days.find((d) => d.id === activeDay) || person.days[0];
+
+  // The suggestion data itself — recomputed reactively.
+  const suggestionData = useMemo(() => computeSuggestions(), [history, day.id]);
+
+  // Whether any suggestions exist at all (so we only show the toggle when useful).
+  const suggestionAvailable = useMemo(() => suggestionData.some((s) => !!s), [suggestionData]);
+
+  // Auto-enable the suggestion overlay the first time history exists; the user can
+  // toggle it off (or on) afterward.
+  useEffect(() => {
+    if (suggestionAvailable && suggestions === null) setSuggestions(true);
+  }, [suggestionAvailable]);
 
   function flash(msg) {
     setNotice(msg);
@@ -333,6 +365,46 @@ function Routine() {
     }).filter((ex) => ex.sets.length > 0);
   }
 
+  // Build per-exercise suggestions for the active day from the last logged session
+  // of each day (A and B). Returns { name, reps, weight, weightNote } | null per
+  // exercise (null when there's no usable history for it).
+  function computeSuggestions() {
+    const byDay = {};
+    history.forEach((s) => {
+      if (s && s.dayId && s.entries && !byDay[s.dayId]) byDay[s.dayId] = s;
+    });
+    return day.exercises.map((ex, i) => {
+      const hist = byDay[day.id];
+      if (!hist) return null;
+      const entries = {};
+      Object.keys(hist.entries || {}).filter((k) => k.startsWith(`${day.id}-${i}-`))
+        .forEach((k) => { entries[k] = hist.entries[k]; });
+      const prog = suggestProgression(entries);
+      if (!prog) return null;
+
+      const parsed = String(ex.reps).split("–").map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
+      const minReps = parsed.length ? Math.min(...parsed) : 6;
+      const maxReps = parsed.length ? Math.max(...parsed) : minReps;
+
+      // Reps: last best + 1, capped at the max recommended; else start at the min.
+      let reps = prog.lastReps + 1;
+      let repsNote = reps > maxReps ? "Start at min reps" : "Reps +1";
+      if (reps > maxReps) reps = minReps;
+
+      // Weight: only advance load when the target reps were actually reached.
+      const hitTarget = prog.lastReps >= minReps;
+      let weight = prog.lastWeight;
+      let weightNote = "";
+      if (hitTarget) {
+        weight = prog.allDivBy5 ? String(Number(prog.lastWeight) + 5) : String(Number(prog.lastWeight) + 2);
+        weightNote = prog.allDivBy5 ? "+5 (5s)" : "+2 lb";
+      } else {
+        weightNote = "Held weight";
+      }
+      return { name: ex.name, reps, weight, weightNote, repsNote, allDivBy5: prog.allDivBy5 };
+    });
+  }
+
   const inputStyle = (filled, accent) => ({
     background: "#0e0f11", border: `1px solid ${filled ? accent + "44" : "#222"}`,
     borderRadius: 5, color: "#ddd", fontFamily: "'DM Mono'", fontSize: 16,
@@ -423,12 +495,17 @@ function Routine() {
       {/* WORKOUT VIEW */}
       {view === "workout" && (<>
         <div style={{ borderBottom: "1px solid #1e2025", padding: "0 28px" }}>
-          <div style={{ maxWidth: 720, margin: "0 auto", display: "flex" }}>
-            {person.days.map((d) => (
-              <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
-                <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
-              </button>
-            ))}
+          <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", justifyContent: "space-between" }}>
+            <div style={{ display: "flex" }}>
+              {person.days.map((d) => (
+                <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
+                  <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setSuggestions((s) => !s)} style={{ background: "none", border: "none", color: suggestions ? day.color : "#555", cursor: "pointer", fontFamily: "'DM Mono'", fontSize: 11, fontWeight: suggestions ? 500 : 400, padding: "14px 4px 11px", whiteSpace: "nowrap", letterSpacing: "0.05em" }}>
+              ✨ Suggested progression{suggestions ? " · ON" : ""}
+            </button>
           </div>
         </div>
 
@@ -506,6 +583,24 @@ function Routine() {
                         <div style={{ background: day.color + "12", border: `1px solid ${day.color}33`, borderRadius: 6, padding: "10px 12px", marginBottom: 16 }}>
                           <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: day.color, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>⬇ drop set protocol</div>
                           <div style={{ fontSize: 12.5, color: "#b0b0b0", lineHeight: 1.5 }}>{ex.dropNote}</div>
+                        </div>
+                      )}
+
+                      {suggestions && suggestionData[i] && (
+                        <div style={{ background: day.color + "12", border: `1px solid ${day.color}33`, borderRadius: 6, padding: "10px 12px", marginBottom: 16 }}>
+                          <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: day.color, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>suggested next time</div>
+                          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                            <div style={{ fontSize: 12.5, color: "#cfd6de" }}>
+                              <span style={{ color: "#888" }}>reps → </span>
+                              <span style={{ fontWeight: 500 }}>{suggestionData[i].reps}</span>
+                              <span style={{ color: "#888", marginLeft: 6, fontSize: 11 }}>({suggestionData[i].repsNote})</span>
+                            </div>
+                            <div style={{ fontSize: 12.5, color: "#cfd6de" }}>
+                              <span style={{ color: "#888" }}>weight → </span>
+                              <span style={{ fontWeight: 500 }}>{suggestionData[i].weight || "—"} lb</span>
+                              <span style={{ color: "#888", marginLeft: 6, fontSize: 11 }}>({suggestionData[i].weightNote})</span>
+                            </div>
+                          </div>
                         </div>
                       )}
 
