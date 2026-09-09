@@ -146,17 +146,21 @@ function isBackup(d) {
 }
 
 // Progressive overload suggestion. `entries` is one finished session's logged sets
-// for a single exercise. Returns { lastWeight, lastReps, allDivBy5 } — the raw
-// building blocks. The caller combines these with the exercise's rep range:
-//   reps  → last session's best set (the set with the most reps) + 1; if that would
-//           exceed the exercise's max recommended rep, reset to the min instead.
-//   weight→ only on the weight-increase branch: +2 lb, or +5 when every logged
-//           weight for this exercise is divisible by 5.
+// for a single exercise; drop-set rows (d1/d2) are skipped — they're failure work at
+// reduced load and don't represent the working weight. Returns { lastWeight,
+// lastReps, allDivBy5 } — the raw building blocks. The caller combines these with
+// the exercise's rep range so exactly one variable moves per session:
+//   weight→ only when the top of the range was hit: +2 lb, or +5 when every logged
+//           working weight is divisible by 5; reps restart at the min.
+//   reps  → otherwise: last session's best set (the set with the most reps) + 1,
+//           and the weight holds.
 // When there's no usable history the exercise keeps { weight: "", reps: "" }.
 function suggestProgression(entries) {
   if (!entries || typeof entries !== "object") return null;
   const weights = [], bestReps = { v: -1, w: "" };
-  Object.values(entries).forEach((s) => {
+  Object.keys(entries).forEach((k) => {
+    if (k.split("-").pop().startsWith("d")) return; // drop-set rows aren't working sets
+    const s = entries[k];
     if (s && s.weight) { const w = parseFloat(s.weight); if (!isNaN(w)) weights.push(w); }
     if (s && s.reps) { const r = parseFloat(s.reps); if (!isNaN(r) && r > bestReps.v) { bestReps.v = r; bestReps.w = s.weight; } }
   });
@@ -365,9 +369,11 @@ function Routine() {
     }).filter((ex) => ex.sets.length > 0);
   }
 
-  // Build per-exercise suggestions for the active day from the last logged session
-  // of each day (A and B). Returns { name, reps, weight, weightNote } | null per
-  // exercise (null when there's no usable history for it).
+  // Build per-exercise suggestions for the active day, comparing only against the
+  // most recent session of that same day type — Day A never looks at Day B and
+  // vice versa. Exactly one of reps or weight advances per suggestion. Returns
+  // { name, reps, weight, weightNote, repsNote } | null per exercise (null when
+  // there's no usable history for it).
   function computeSuggestions() {
     const byDay = {};
     history.forEach((s) => {
@@ -386,22 +392,16 @@ function Routine() {
       const minReps = parsed.length ? Math.min(...parsed) : 6;
       const maxReps = parsed.length ? Math.max(...parsed) : minReps;
 
-      // Reps: last best + 1, capped at the max recommended; else start at the min.
-      let reps = prog.lastReps + 1;
-      let repsNote = reps > maxReps ? "Start at min reps" : "Reps +1";
-      if (reps > maxReps) reps = minReps;
-
-      // Weight: only advance load when the target reps were actually reached.
-      const hitTarget = prog.lastReps >= minReps;
-      let weight = prog.lastWeight;
-      let weightNote = "";
-      if (hitTarget) {
-        weight = prog.allDivBy5 ? String(Number(prog.lastWeight) + 5) : String(Number(prog.lastWeight) + 2);
-        weightNote = prog.allDivBy5 ? "+5 (5s)" : "+2 lb";
-      } else {
-        weightNote = "Held weight";
+      // Exactly one variable moves per session — never reps and weight together.
+      const hasWeight = prog.lastWeight !== "" && !isNaN(Number(prog.lastWeight));
+      if (prog.lastReps >= maxReps) {
+        // Top of the range hit: raise the load one step, restart at the bottom.
+        if (!hasWeight) return { name: ex.name, reps: maxReps, weight: "", weightNote: "", repsNote: "Top of range — log a weight to raise the load" };
+        const step = prog.allDivBy5 ? 5 : 2;
+        return { name: ex.name, reps: minReps, weight: String(Number(prog.lastWeight) + step), weightNote: prog.allDivBy5 ? "+5 (5s)" : "+2 lb", repsNote: "New load — restart at min" };
       }
-      return { name: ex.name, reps, weight, weightNote, repsNote, allDivBy5: prog.allDivBy5 };
+      // Below the top: hold the load, climb one rep toward it.
+      return { name: ex.name, reps: Math.min(prog.lastReps + 1, maxReps), weight: prog.lastWeight || "", weightNote: hasWeight ? "Held weight" : "", repsNote: "Reps +1" };
     });
   }
 
@@ -593,12 +593,12 @@ function Routine() {
                             <div style={{ fontSize: 12.5, color: "#cfd6de" }}>
                               <span style={{ color: "#888" }}>reps → </span>
                               <span style={{ fontWeight: 500 }}>{suggestionData[i].reps}</span>
-                              <span style={{ color: "#888", marginLeft: 6, fontSize: 11 }}>({suggestionData[i].repsNote})</span>
+                              {suggestionData[i].repsNote && <span style={{ color: "#888", marginLeft: 6, fontSize: 11 }}>({suggestionData[i].repsNote})</span>}
                             </div>
                             <div style={{ fontSize: 12.5, color: "#cfd6de" }}>
                               <span style={{ color: "#888" }}>weight → </span>
                               <span style={{ fontWeight: 500 }}>{suggestionData[i].weight || "—"} lb</span>
-                              <span style={{ color: "#888", marginLeft: 6, fontSize: 11 }}>({suggestionData[i].weightNote})</span>
+                              {suggestionData[i].weightNote && <span style={{ color: "#888", marginLeft: 6, fontSize: 11 }}>({suggestionData[i].weightNote})</span>}
                             </div>
                           </div>
                         </div>
