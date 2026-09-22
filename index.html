@@ -148,12 +148,15 @@ function isBackup(d) {
 // Progressive overload suggestion. `entries` is one finished session's logged sets
 // for a single exercise; drop-set rows (d1/d2) are skipped — they're failure work at
 // reduced load and don't represent the working weight. Returns { lastWeight,
-// lastReps, allDivBy5 } — the raw building blocks. The caller combines these with
-// the exercise's rep range so exactly one variable moves per session:
-//   weight→ only when the top of the range was hit: +2 lb, or +5 when every logged
-//           working weight is divisible by 5; reps restart at the min.
+// lastReps, maxWeight, allDivBy5 } — the raw building blocks. The caller combines
+// these with the exercise's rep range so exactly one variable moves per session:
+//   weight→ only when the top of the range was hit: +2 lb (or +5 when every logged
+//           working weight is divisible by 5) on top of the heaviest working weight;
+//           reps restart at the min. Bumping from maxWeight — not the best-rep set's
+//           weight — stops a lighter top-range set from suggesting a "new" load equal
+//           to a heavier set already lifted.
 //   reps  → otherwise: last session's best set (the set with the most reps) + 1,
-//           and the weight holds.
+//           and that set's weight holds.
 // When there's no usable history the exercise keeps { weight: "", reps: "" }.
 function suggestProgression(entries) {
   if (!entries || typeof entries !== "object") return null;
@@ -165,7 +168,7 @@ function suggestProgression(entries) {
     if (s && s.reps) { const r = parseFloat(s.reps); if (!isNaN(r) && r > bestReps.v) { bestReps.v = r; bestReps.w = s.weight; } }
   });
   if (bestReps.v < 0) return null;
-  return { lastWeight: bestReps.w, lastReps: bestReps.v, allDivBy5: weights.length > 0 && weights.every((w) => w % 5 === 0) };
+  return { lastWeight: bestReps.w, lastReps: bestReps.v, maxWeight: weights.length ? Math.max(...weights) : null, allDivBy5: weights.length > 0 && weights.every((w) => w % 5 === 0) };
 }
 
 // localStorage helpers — synchronous, work in any real browser
@@ -176,6 +179,11 @@ function loadJSON(k, fallback) {
 function saveJSON(k, val) {
   try { localStorage.setItem(k, JSON.stringify(val)); } catch (_) {}
 }
+// Shape guards — corrupt localStorage (manual edit, partial write) must never blank
+// the page; fall back to the empty shape and keep training.
+function isMap(v) { return !!v && typeof v === "object" && !Array.isArray(v); }
+function loadLogs(id) { const v = loadJSON(logsKey(id), {}); return isMap(v) ? v : {}; }
+function loadHistory(id) { const v = loadJSON(historyKey(id), []); return Array.isArray(v) ? v : []; }
 
 function Routine() {
   const [activeDay, setActiveDay] = useState("A");
@@ -184,8 +192,8 @@ function Routine() {
     const saved = loadJSON(STORE_PERSON, DEFAULT_PERSON);
     return people.some((p) => p.id === saved) ? saved : DEFAULT_PERSON;
   });
-  const [logs, setLogs] = useState(() => loadJSON(logsKey(personId), {}));
-  const [history, setHistory] = useState(() => loadJSON(historyKey(personId), []));
+  const [logs, setLogs] = useState(() => loadLogs(personId));
+  const [history, setHistory] = useState(() => loadHistory(personId));
   const [view, setView] = useState("workout");
   const [expandedSession, setExpandedSession] = useState(null);
   const [notice, setNotice] = useState("");
@@ -220,11 +228,12 @@ function Routine() {
 
       // Exactly one variable moves per session — never reps and weight together.
       const hasWeight = prog.lastWeight !== "" && !isNaN(Number(prog.lastWeight));
+      const bumpBase = prog.maxWeight != null ? Number(prog.maxWeight) : hasWeight ? Number(prog.lastWeight) : null;
       let next;
       if (prog.lastReps >= maxReps) {
         // Top of the range hit: raise the load one step, restart at the bottom.
-        if (!hasWeight) next = { reps: maxReps, weight: "", weightNote: "", repsNote: "Top of range — log a weight to raise the load" };
-        else { const step = prog.allDivBy5 ? 5 : 2; next = { reps: minReps, weight: String(Number(prog.lastWeight) + step), weightNote: prog.allDivBy5 ? "+5 (5s)" : "+2 lb", repsNote: "New load — restart at min" }; }
+        if (bumpBase == null) next = { reps: maxReps, weight: "", weightNote: "", repsNote: "Top of range — log a weight to raise the load" };
+        else { const step = prog.allDivBy5 ? 5 : 2; next = { reps: minReps, weight: String(bumpBase + step), weightNote: prog.allDivBy5 ? "+5 (5s)" : "+2 lb", repsNote: "New load — restart at min" }; }
       } else {
         // Below the top: hold the load, climb one rep toward it.
         next = { reps: Math.min(prog.lastReps + 1, maxReps), weight: prog.lastWeight || "", weightNote: hasWeight ? "Held weight" : "", repsNote: "Reps +1" };
@@ -254,8 +263,8 @@ function Routine() {
     if (id === personId) return;
     setPersonId(id);
     saveJSON(STORE_PERSON, id);
-    setLogs(loadJSON(logsKey(id), {}));
-    setHistory(loadJSON(historyKey(id), []));
+    setLogs(loadLogs(id));
+    setHistory(loadHistory(id));
     setExpanded(null);
     setExpandedSession(null);
   }
@@ -264,8 +273,8 @@ function Routine() {
   const personStatus = useMemo(() => {
     const out = {};
     people.forEach((p) => {
-      const h = p.id === personId ? history : loadJSON(historyKey(p.id), []);
-      const l = p.id === personId ? logs : loadJSON(logsKey(p.id), {});
+      const h = p.id === personId ? history : loadHistory(p.id);
+      const l = p.id === personId ? logs : loadLogs(p.id);
       const first = Array.isArray(h) ? h[0] : null;
       out[p.id] = { inProgress: hasData(l), lastDate: first && first.date ? fmtDate(first.date) : "" };
     });
@@ -313,7 +322,7 @@ function Routine() {
     people.forEach((p) => {
       payload.people[p.id] = p.id === personId
         ? { current: logs, history }
-        : { current: loadJSON(logsKey(p.id), {}), history: loadJSON(historyKey(p.id), []) };
+        : { current: loadLogs(p.id), history: loadHistory(p.id) };
     });
     const json = JSON.stringify(payload, null, 2);
     try {
@@ -353,15 +362,15 @@ function Routine() {
       const bucket = buckets[pid] || {};
       const isActive = pid === personId;
 
-      const existingHistory = isActive ? history : loadJSON(historyKey(pid), []);
+      const existingHistory = isActive ? history : loadHistory(pid);
       const { merged, seen } = mergeHistory(existingHistory, bucket.history);
       const gained = merged.length - existingHistory.length;
       added += gained; dup += seen - gained;
       saveJSON(historyKey(pid), merged);
       if (isActive) setHistory(merged);
 
-      const incoming = bucket.current && typeof bucket.current === "object" ? bucket.current : {};
-      const live = isActive ? logs : loadJSON(logsKey(pid), {});
+      const incoming = isMap(bucket.current) ? bucket.current : {};
+      const live = isActive ? logs : loadLogs(pid);
       if (!hasData(live) && Object.keys(incoming).length) {
         saveJSON(logsKey(pid), incoming);
         if (isActive) setLogs(incoming);
@@ -426,16 +435,19 @@ function Routine() {
   const combinedHistory = useMemo(() => {
     const all = [];
     people.forEach((p) => {
-      const h = p.id === personId ? history : loadJSON(historyKey(p.id), []);
+      const h = p.id === personId ? history : loadHistory(p.id);
       (Array.isArray(h) ? h : []).forEach((s) => { if (s && s.id != null) all.push(s); });
     });
     return all.sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [personId, history, dataTick]);
 
+  // The tab label mirrors the active history filter: combined count in "both" mode.
+  const historyCount = historyFilter === "both" ? combinedHistory.length : history.length;
+
   // Delete a session from whichever store it actually lives in — needed so the
   // combined "both" timeline can remove either person's row without switching.
   function deleteSessionIn(pid, id) {
-    const existing = pid === personId ? history : loadJSON(historyKey(pid), []);
+    const existing = pid === personId ? history : loadHistory(pid);
     const next = (Array.isArray(existing) ? existing : []).filter((s) => s.id !== id);
     saveJSON(historyKey(pid), next);
     if (pid === personId) setHistory(next);
@@ -545,7 +557,7 @@ function Routine() {
       {/* View switch */}
       <div style={{ borderBottom: "1px solid #1e2025", padding: "0 28px" }}>
         <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", gap: 4 }}>
-          {[{ id: "workout", label: "Workout" }, { id: "history", label: `History${history.length ? ` (${history.length})` : ""}` }, { id: "plan", label: "Plan" }].map((v) => (
+          {[{ id: "workout", label: "Workout" }, { id: "history", label: `History${historyCount ? ` (${historyCount})` : ""}` }, { id: "plan", label: "Plan" }].map((v) => (
             <button key={v.id} onClick={() => setView(v.id)} style={{ background: "none", border: "none", borderBottom: view === v.id ? "2px solid #888" : "2px solid transparent", color: view === v.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "12px 16px 11px", fontSize: 12.5, fontFamily: "'DM Mono'", fontWeight: 500, marginBottom: -1, letterSpacing: "0.05em" }}>
               {v.label}
             </button>
@@ -558,11 +570,15 @@ function Routine() {
         <div style={{ borderBottom: "1px solid #1e2025", padding: "0 28px" }}>
           <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", justifyContent: "space-between" }}>
             <div style={{ display: "flex" }}>
-              {person.days.map((d) => (
-                <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
-                  <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
-                </button>
-              ))}
+              {person.days.map((d) => {
+                const started = d.exercises.filter((_, i) => hasAnyLog(d.id, i)).length;
+                return (
+                  <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
+                    <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
+                    {started > 0 && <span style={{ fontFamily: "'DM Mono'", fontSize: 10.5, color: started === d.exercises.length ? "#3aa87d" : d.color, marginLeft: 6 }}>{started}/{d.exercises.length}</span>}
+                  </button>
+                );
+              })}
             </div>
             <button onClick={() => setSuggestions((s) => !s)} style={{ background: "none", border: "none", color: suggestions ? day.color : "#555", cursor: "pointer", fontFamily: "'DM Mono'", fontSize: 11, fontWeight: suggestions ? 500 : 400, padding: "14px 4px 11px", whiteSpace: "nowrap", letterSpacing: "0.05em" }}>
               ✨ Suggested progression{suggestions ? " · ON" : ""}
@@ -581,15 +597,15 @@ function Routine() {
               const logged = hasAnyLog(day.id, i);
               const ins = insights[i] || { last: null, next: null };
               return (
-                <div key={i} style={{ background: isOpen ? "#14161a" : "#111317", border: `1px solid ${isOpen ? day.color + "55" : "#1c1e24"}`, borderRadius: 8, overflow: "hidden" }}>
+                <div key={i} style={{ background: isOpen ? "#14161a" : logged ? "#0f1310" : "#111317", border: `1px solid ${isOpen ? day.color + "55" : logged ? "#2c4436" : "#1c1e24"}`, borderRadius: 8, overflow: "hidden" }}>
                   <div onClick={() => setExpanded(isOpen ? null : i)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: day.color, minWidth: 20 }}>{String(i + 1).padStart(2, "0")}</span>
+                      <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: logged ? "#3aa87d" : day.color, minWidth: 20 }}>{String(i + 1).padStart(2, "0")}</span>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 14, fontWeight: 500, color: "#ddd" }}>{ex.name}</span>
+                          <span style={{ fontSize: 14, fontWeight: logged ? 400 : 500, color: logged ? "#7d9c8b" : "#ddd", textDecoration: logged ? "line-through" : "none", textDecorationColor: "#3aa87d66" }}>{ex.name}</span>
                           {ex.dropSet && <span style={{ fontSize: 10, fontFamily: "'DM Mono'", color: "#0e0f11", background: day.color, padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>⬇ drop set</span>}
-                          {logged && <span style={{ fontSize: 10, fontFamily: "'DM Mono'", color: day.color, background: day.color + "18", padding: "1px 6px", borderRadius: 3 }}>logged</span>}
+                          {logged && <span title="sets logged" style={{ fontSize: 10.5, fontFamily: "'DM Mono'", color: "#3aa87d", background: "#3aa87d14", border: "1px solid #3aa87d33", padding: "1px 7px", borderRadius: 999, fontWeight: 600 }}>✓ logged</span>}
                         </div>
                         <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{ex.target}</div>
                         {ins.last && (

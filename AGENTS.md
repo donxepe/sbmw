@@ -16,7 +16,7 @@ offline.
 
 | File | Role |
 |---|---|
-| `index.html` | **The entire app.** Data, component, styles, bootstrap — all of it (~543 lines) |
+| `index.html` | **The entire app.** Data, component, styles, bootstrap — all of it (~860 lines) |
 | `sw.js` | Service worker. Cache-first offline shell |
 | `manifest.webmanifest` | PWA manifest (install / home-screen) |
 | `icon-192.png`, `icon-512.png` | App icons |
@@ -29,11 +29,11 @@ Babel standalone load from unpkg CDN and JSX is compiled **in the browser at run
 
 Rough layout of that script block:
 
-- `STORE_LOGS` / `STORE_HISTORY` — localStorage keys
-- `days[]` — **the routine data.** Two day objects (A/B), each with `exercises[]`
-- `principles[]` — the "Why this works" cards
-- `key()`, `loadJSON()`, `saveJSON()` — helpers
-- `Routine()` — the single component holding all state and both views
+- `STORE_LOGS` / `STORE_HISTORY` / `STORE_PERSON` — localStorage key bases
+- `daysLuis[]` / `daysLiz[]` — **the routine data.** Two day objects (A/B) per person, each with `exercises[]`
+- `P.*` + `people[]` — the "Why this works" cards and the profile list (id, name, color, days, weekly sets)
+- `key()`, `logsKey()` / `historyKey()`, `loadJSON()` / `saveJSON()`, `loadLogs()` / `loadHistory()` — helpers
+- `Routine()` — the single component holding all state, both profiles, and both views
 - `btn()`, `modalBg`, `modalCard` — shared style helpers (defined *after* `Routine`;
   function hoisting makes this fine, don't "fix" it)
 - `ReactDOM.createRoot(...).render(...)` + service worker registration
@@ -59,15 +59,21 @@ Rough layout of that script block:
 
 ### Data model (localStorage)
 
-Two keys, both JSON:
+Per-profile keys, all JSON. Luis (the default profile) keeps the original unsuffixed
+names so his pre-multi-person data never moves; every other profile gets `-<id>`
+suffixed keys. The active profile id lives in `workout-active-person`:
 
-- `workout-logs-min` — the **current, in-progress sheet**. Flat map:
+- `workout-logs-min[-<id>]` — the **current, in-progress sheet.** Flat map:
   `{ "A-0-0": { weight: "135", reps: "8" }, "A-4-d1": {...} }`
   Key format is `` `${dayId}-${exerciseIndex}-${setKey}` `` where `setKey` is a numeric
   index (`0`, `1`, `2`) for working sets or `d1`/`d2` for drop-set drops.
-- `workout-history-min` — array of finished sessions, newest first:
-  `{ id: <Date.now()>, date: <ISO>, dayId: "A", focus: "Full Body A", entries: {...} }`
-  where `entries` is a frozen copy of a logs map.
+- `workout-history-min[-<id>]` — array of finished sessions, newest first:
+  `{ id: <Date.now()>, date: <ISO>, personId, dayId: "A", focus: "Full Body A", entries: {...} }`
+  where `entries` is a frozen copy of a logs map. Sessions carry their own `personId`;
+  sessions saved before multi-person support have none and belong to Luis.
+
+Reads go through `loadLogs()` / `loadHistory()`, which fall back to the empty shape when
+the stored JSON has the wrong type — corrupt storage must never blank the page.
 
 Every keystroke writes through to localStorage immediately (`updateLog` → `saveJSON`).
 There is no debounce and it doesn't need one.
@@ -75,13 +81,15 @@ There is no debounce and it doesn't need one.
 **Export/import JSON envelope:**
 
 ```json
-{ "app": "minimalist-full-body", "version": 1, "exportedAt": "...",
-  "current": { /* logs map */ }, "history": [ /* sessions */ ] }
+{ "app": "minimalist-full-body", "version": 2, "exportedAt": "...",
+  "people": { "<id>": { "current": { /* logs map */ }, "history": [ /* sessions */ ] } } }
 ```
 
-Import merges history **by session `id`** so re-importing is idempotent, and refuses to
-clobber an in-progress sheet (only restores `current` when the live sheet is empty).
-Preserve both behaviors.
+Import accepts both shapes: v2 buckets are applied to their named profiles (unknown ids
+are skipped and reported), and a legacy v1 `{ current, history }` envelope maps to Luis.
+History merges **by session `id`** so re-importing is idempotent, and import refuses to
+clobber an in-progress sheet (only restores `current` when that profile's live sheet is
+empty). Preserve both behaviors.
 
 ## Critical rules
 
