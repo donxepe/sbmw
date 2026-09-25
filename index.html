@@ -188,6 +188,7 @@ function loadHistory(id) { const v = loadJSON(historyKey(id), []); return Array.
 function Routine() {
   const [activeDay, setActiveDay] = useState("A");
   const [expanded, setExpanded] = useState(null);
+  const [cueOpen, setCueOpen] = useState(null);
   const [personId, setPersonId] = useState(() => {
     const saved = loadJSON(STORE_PERSON, DEFAULT_PERSON);
     return people.some((p) => p.id === saved) ? saved : DEFAULT_PERSON;
@@ -266,6 +267,7 @@ function Routine() {
     setLogs(loadLogs(id));
     setHistory(loadHistory(id));
     setExpanded(null);
+    setCueOpen(null);
     setExpandedSession(null);
   }
 
@@ -573,7 +575,7 @@ function Routine() {
               {person.days.map((d) => {
                 const started = d.exercises.filter((_, i) => hasAnyLog(d.id, i)).length;
                 return (
-                  <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
+              <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); setCueOpen(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
                     <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
                     {started > 0 && <span style={{ fontFamily: "'DM Mono'", fontSize: 10.5, color: started === d.exercises.length ? "#3aa87d" : d.color, marginLeft: 6 }}>{started}/{d.exercises.length}</span>}
                   </button>
@@ -629,8 +631,11 @@ function Routine() {
                     <div style={{ borderTop: "1px solid #1e2025", padding: "16px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
                         <div>
-                          <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 4 }}>Coaching cue</div>
-                          <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.5, marginBottom: 10 }}>{ex.note}</div>
+                          <div onClick={() => setCueOpen(cueOpen === i ? null : i)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase" }}>Coaching cue</span>
+                            <span style={{ color: "#333", fontSize: 12 }}>{cueOpen === i ? "−" : "+"}</span>
+                          </div>
+                          {cueOpen === i && <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.5, marginBottom: 10 }}>{ex.note}</div>}
                           <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.videoQuery)}`} target="_blank" rel="noopener noreferrer"
                             style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontFamily: "'DM Mono'", color: day.color, background: day.color + "14", letterSpacing: "0.05em", textDecoration: "none", border: `1px solid ${day.color}66`, borderRadius: 4, padding: "6px 12px" }}>
                             ▶ form video on YouTube
