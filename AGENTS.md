@@ -71,6 +71,10 @@ suffixed keys. The active profile id lives in `workout-active-person`:
   `{ id: <Date.now()>, date: <ISO>, personId, dayId: "A", focus: "Full Body A", entries: {...} }`
   where `entries` is a frozen copy of a logs map. Sessions carry their own `personId`;
   sessions saved before multi-person support have none and belong to Luis.
+  Optional `suggested: { "<exIdx>": { weight, reps } }` snapshots what the app suggested
+  that session (absent on first-ever sessions). The next suggestion only progresses if
+  every working set met its snapshot (weight >= suggested, reps >= suggested); otherwise
+  it repeats as a retry. Sessions without the field keep the ungated legacy behavior.
 
 Reads go through `loadLogs()` / `loadHistory()`, which fall back to the empty shape when
 the stored JSON has the wrong type — corrupt storage must never blank the page.

@@ -210,7 +210,9 @@ function Routine() {
 
   // Per-exercise insight for the active day, compared only against the most recent
   // session of that same day type (Day A never looks at Day B). `last` is what was
-  // actually logged; `next` applies the one-variable-at-a-time progression rule.
+  // actually logged; `next` applies the one-variable-at-a-time progression rule,
+  // gated on the previous session meeting its own suggestion (every working set at
+  // >= suggested weight and reps) — otherwise `next` repeats it as a retry.
   const insights = useMemo(() => {
     const byDay = {};
     history.forEach((s) => { if (s && s.dayId && s.entries && !byDay[s.dayId]) byDay[s.dayId] = s; });
@@ -222,6 +224,24 @@ function Routine() {
         .forEach((k) => { entries[k] = hist.entries[k]; });
       const prog = suggestProgression(entries);
       if (!prog) return { last: null, next: null };
+
+      // Gate: only progress if the previous session fully met its own suggestion —
+      // every working set (drop rows excluded) at >= suggested weight and reps.
+      // Sessions predating the snapshot have no `suggested` and keep the old rule.
+      const sug = isMap(hist.suggested) ? hist.suggested[String(i)] : null;
+      if (sug && typeof sug.reps === "number") {
+        let metCount = 0;
+        for (let s = 0; s < ex.sets; s++) {
+          const row = entries[key(day.id, i, s)];
+          const w = row ? parseFloat(row.weight) : NaN;
+          const r = row ? parseFloat(row.reps) : NaN;
+          const okW = sug.weight === "" ? !isNaN(w) : (!isNaN(w) && w >= Number(sug.weight));
+          if (okW && !isNaN(r) && r >= sug.reps) metCount++;
+        }
+        if (metCount < ex.sets) {
+          return { last: { weight: prog.lastWeight, reps: prog.lastReps }, next: { weight: sug.weight || "", reps: sug.reps, weightNote: "", repsNote: `retry — ${metCount}/${ex.sets} sets at suggested load` } };
+        }
+      }
 
       const parsed = String(ex.reps).split("–").map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
       const minReps = parsed.length ? Math.min(...parsed) : 6;
@@ -313,7 +333,12 @@ function Routine() {
     if (!window.confirm(`Save ${day.focus} to ${person.name}'s history? The current sheet will be cleared.`)) return;
     const entries = {};
     dayKeys(logs, activeDay).forEach((k) => { entries[k] = { ...logs[k] }; });
+    // Snapshot of what the app suggested this session — next time's progression is
+    // gated on whether these were fully met. Absent on a profile's first session.
+    const suggested = {};
+    day.exercises.forEach((_, i) => { const n = insights[i] && insights[i].next; if (n) suggested[String(i)] = { weight: n.weight || "", reps: n.reps }; });
     const session = { id: Date.now(), date: new Date().toISOString(), personId, dayId: activeDay, focus: day.focus, entries };
+    if (Object.keys(suggested).length) session.suggested = suggested;
     persistHistory([session, ...history]);
     clearDay(activeDay);
     flash(`Saved ${day.focus} to ${person.name}'s history. Sheet cleared.`);
