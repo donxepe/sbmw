@@ -310,6 +310,7 @@ function Routine() {
 
   function finishSession() {
     if (!hasData(logs, activeDay)) { flash(`Nothing logged for ${day.focus} yet — fill in some sets first.`); return; }
+    if (!window.confirm(`Save ${day.focus} to ${person.name}'s history? The current sheet will be cleared.`)) return;
     const entries = {};
     dayKeys(logs, activeDay).forEach((k) => { entries[k] = { ...logs[k] }; });
     const session = { id: Date.now(), date: new Date().toISOString(), personId, dayId: activeDay, focus: day.focus, entries };
