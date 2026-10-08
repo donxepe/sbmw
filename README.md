@@ -1,4 +1,4 @@
-# Minimalist Full Body
+# Minimalist Full Body Workout
 
 A self-contained Progressive Web App for logging a 2-day full-body hypertrophy routine.
 Install it on your phone, take it to the gym, and it works **offline** — no account,
