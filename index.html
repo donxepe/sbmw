@@ -171,6 +171,15 @@ function suggestProgression(entries) {
   return { lastWeight: bestReps.w, lastReps: bestReps.v, maxWeight: weights.length ? Math.max(...weights) : null, allDivBy5: weights.length > 0 && weights.every((w) => w % 5 === 0) };
 }
 
+// A session whose top working weight is under LIGHT_RATIO of the recent peak counts as
+// a deload / comeback and is ignored for progression (see `insights`).
+const LIGHT_RATIO = 0.9;
+const LIGHT_WINDOW = 3;
+// Recovery (deload) fill, Jeff Nippard style: about half the working sets, same reps,
+// lighter load so it lands well short of failure. Must stay below LIGHT_RATIO so the
+// recovery session is then ignored by progression.
+const RECOVERY_LOAD = 0.8;
+
 // localStorage helpers — synchronous, work in any real browser
 function loadJSON(k, fallback) {
   try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }
@@ -213,17 +222,27 @@ function Routine() {
   // actually logged; `next` applies the one-variable-at-a-time progression rule,
   // gated on the previous session meeting its own suggestion (every working set at
   // >= suggested weight and reps) — otherwise `next` repeats it as a retry.
+  //
+  // Deload / comeback sessions are ignored: of the last LIGHT_WINDOW sessions that
+  // logged this exercise, the newest one whose top working weight is within
+  // LIGHT_RATIO of the heaviest among them is used. After LIGHT_WINDOW light
+  // sessions in a row the old peak falls out of the window and light is the new normal.
   const insights = useMemo(() => {
-    const byDay = {};
-    history.forEach((s) => { if (s && s.dayId && s.entries && !byDay[s.dayId]) byDay[s.dayId] = s; });
-    const hist = byDay[day.id];
+    const sessions = history.filter((s) => s && s.dayId === day.id && isMap(s.entries));
     return day.exercises.map((ex, i) => {
-      if (!hist) return { last: null, next: null };
-      const entries = {};
-      Object.keys(hist.entries || {}).filter((k) => k.startsWith(`${day.id}-${i}-`))
-        .forEach((k) => { entries[k] = hist.entries[k]; });
-      const prog = suggestProgression(entries);
-      if (!prog) return { last: null, next: null };
+      const cands = [];
+      for (const s of sessions) {
+        const entries = {};
+        Object.keys(s.entries).filter((k) => k.startsWith(`${day.id}-${i}-`))
+          .forEach((k) => { entries[k] = s.entries[k]; });
+        const prog = suggestProgression(entries);
+        if (prog) cands.push({ hist: s, entries, prog });
+        if (cands.length === LIGHT_WINDOW) break;
+      }
+      if (!cands.length) return { last: null, next: null };
+      const peak = Math.max(...cands.map((c) => c.prog.maxWeight ?? -Infinity));
+      const skipped = cands.findIndex((c) => c.prog.maxWeight == null || c.prog.maxWeight >= LIGHT_RATIO * peak);
+      const { hist, entries, prog } = cands[skipped];
 
       // Gate: only progress if the previous session fully met its own suggestion —
       // every working set (drop rows excluded) at >= suggested weight and reps.
@@ -259,7 +278,7 @@ function Routine() {
         // Below the top: hold the load, climb one rep toward it.
         next = { reps: Math.min(prog.lastReps + 1, maxReps), weight: prog.lastWeight || "", weightNote: hasWeight ? "Held weight" : "", repsNote: "Reps +1" };
       }
-      return { last: { weight: prog.lastWeight, reps: prog.lastReps }, next };
+      return { last: { weight: prog.lastWeight, reps: prog.lastReps }, next, skipped };
     });
   }, [history, day.id]);
 
@@ -497,6 +516,23 @@ function Routine() {
     });
   }
 
+  // Recovery version of the suggestion: ceil(sets/2) rows at RECOVERY_LOAD of the
+  // suggested weight (rounded to 5, like warm-ups); the remaining working rows are cleared.
+  function recoveryFill(exIdx, next) {
+    const n = day.exercises[exIdx];
+    const w = Number(next.weight);
+    const weight = w > 0 ? String(Math.round((w * RECOVERY_LOAD) / 5) * 5) : "";
+    const sets = Math.ceil(n.sets / 2);
+    prefillExercise(exIdx, { weight, reps: next.reps });
+    setLogs((prev) => {
+      const nextMap = { ...prev };
+      for (let s = sets; s < n.sets; s++) delete nextMap[key(day.id, exIdx, s)];
+      saveJSON(logsKey(personId), nextMap);
+      return nextMap;
+    });
+    return { weight, sets };
+  }
+
   const inputStyle = (filled, accent) => ({
     background: "#0e0f11", border: `1px solid ${filled ? accent + "44" : "#222"}`,
     borderRadius: 5, color: "#ddd", fontFamily: "'DM Mono'", fontSize: 16,
@@ -705,10 +741,16 @@ function Routine() {
                         <div style={{ background: day.color + "12", border: `1px solid ${day.color}33`, borderRadius: 6, padding: "10px 12px", marginBottom: 16 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
                             <span style={{ fontSize: 11, fontFamily: "'DM Mono'", color: day.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>suggested next time</span>
+                            <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={(e) => { e.stopPropagation(); prefillExercise(i, ins.next); flash(`Filled ${ex.name} with ${ins.next.weight || "—"} lb × ${ins.next.reps}.`); }} style={{ background: day.color + "22", border: `1px solid ${day.color}66`, color: day.color, fontFamily: "'DM Mono'", fontSize: 10.5, fontWeight: 500, cursor: "pointer", padding: "4px 10px", borderRadius: 4, letterSpacing: "0.05em" }}>
                               use these numbers
                             </button>
+                            <button onClick={(e) => { e.stopPropagation(); const r = recoveryFill(i, ins.next); flash(`Recovery: ${r.sets} × ${r.weight || "—"} lb × ${ins.next.reps} for ${ex.name}.`); }} style={{ background: "none", border: "1px solid #2a2c33", color: "#999", fontFamily: "'DM Mono'", fontSize: 10.5, cursor: "pointer", padding: "4px 10px", borderRadius: 4, letterSpacing: "0.05em" }}>
+                              recovery
+                            </button>
+                            </div>
                           </div>
+                          {ins.skipped > 0 && <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>Ignored {ins.skipped} lighter session{ins.skipped > 1 ? "s" : ""} (deload / comeback).</div>}
                           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                             <div style={{ fontSize: 12.5, color: "#cfd6de" }}>
                               <span style={{ color: "#888" }}>reps → </span>
