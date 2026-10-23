@@ -217,11 +217,11 @@ function Routine() {
   const person = people.find((p) => p.id === personId) || people[0];
   const day = person.days.find((d) => d.id === activeDay) || person.days[0];
 
-  // Per-exercise insight for the active day, compared only against the most recent
-  // session of that same day type (Day A never looks at Day B). `last` is what was
-  // actually logged; `next` applies the one-variable-at-a-time progression rule,
-  // gated on the previous session meeting its own suggestion (every working set at
-  // >= suggested weight and reps) — otherwise `next` repeats it as a retry.
+  // Per-exercise insight for the active day, compared against sessions of that same
+  // day type only (Day A never looks at Day B). `last` is what was actually logged;
+  // `next` applies the one-variable-at-a-time progression rule, gated on the source
+  // session meeting its own suggestion (every working set at >= suggested weight and
+  // reps) — otherwise `next` repeats it as a retry.
   //
   // Deload / comeback sessions are ignored: of the last LIGHT_WINDOW sessions that
   // logged this exercise, the newest one whose top working weight is within
