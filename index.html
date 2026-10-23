@@ -630,7 +630,9 @@ function Routine() {
               })}
             </div>
             <button onClick={() => setSuggestions((s) => !s)} style={{ background: "none", border: "none", color: suggestions ? day.color : "#555", cursor: "pointer", fontFamily: "'DM Mono'", fontSize: 11, fontWeight: suggestions ? 500 : 400, padding: "14px 4px 11px", whiteSpace: "nowrap", letterSpacing: "0.05em" }}>
-              ✨ Suggested progression{suggestions ? " · ON" : ""}
+              ✨ Suggested{
+                suggestions ? " · ON" : ""
+              }
             </button>
           </div>
         </div>
