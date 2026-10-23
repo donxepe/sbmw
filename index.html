@@ -335,6 +335,9 @@ function Routine() {
   function hasAnyLog(dayId, exIdx) {
     return Object.keys(logs).some((k) => k.startsWith(`${dayId}-${exIdx}-`) && (logs[k]?.weight || logs[k]?.reps));
   }
+  function setsDone(dayId, exIdx, ex) {
+    return Array.from({ length: ex.sets }, (_, s) => getLog(dayId, exIdx, s)).filter((l) => l.reps).length;
+  }
   function clearLogs() { localStorage.removeItem(logsKey(personId)); setLogs({}); }
   function clearDay(dayId) {
     setLogs((prev) => {
@@ -542,7 +545,7 @@ function Routine() {
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: "#0e0f11", minHeight: "100vh", color: "#e8e6e1" }}>
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #1e2025", padding: "calc(28px + env(safe-area-inset-top)) 28px 24px" }}>
+      <div style={{ borderBottom: "1px solid #1e2025", padding: "calc(20px + env(safe-area-inset-top)) 28px 16px" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             {people.map((p) => {
@@ -567,26 +570,7 @@ function Routine() {
               );
             })}
           </div>
-          <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: "#555", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-            Minimalist · 2 days/week · Full body
-          </span>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginTop: 6, gap: 12 }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>Minimalist Full Body</h1>
-              <p style={{ margin: "6px 0 0", color: "#666", fontSize: 13.5, lineHeight: 1.5 }}>
-                5 movements/session · 6–8 reps · drop set on the final isolation
-              </p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", marginTop: 2 }}>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={exportData} style={btn()}>↓ export</button>
-                <button onClick={() => setImportOpen(true)} style={btn()}>↑ import</button>
-              </div>
-              {hasData(logs) && (
-                <button onClick={() => { if (window.confirm(`Clear ${person.name}'s current sheet? Logged sets that haven't been saved to history will be lost.`)) clearLogs(); }} style={btn("#2a1a1a", "#6b3030")}>clear sheet</button>
-              )}
-            </div>
-          </div>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em" }}>Minimalist Full Body</h1>
         </div>
       </div>
 
@@ -635,11 +619,12 @@ function Routine() {
           <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", justifyContent: "space-between" }}>
             <div style={{ display: "flex" }}>
               {person.days.map((d) => {
-                const started = d.exercises.filter((_, i) => hasAnyLog(d.id, i)).length;
+                const started = d.exercises.some((_, i) => hasAnyLog(d.id, i));
+                const done = d.exercises.filter((ex, i) => setsDone(d.id, i, ex) === ex.sets).length;
                 return (
-              <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); setCueOpen(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#555", cursor: "pointer", padding: "14px 20px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1 }}>
-                    <span style={{ color: activeDay === d.id ? d.color : "#555", fontFamily: "'DM Mono'", fontSize: 11, marginRight: 6 }}>{d.id}</span>{d.focus}
-                    {started > 0 && <span style={{ fontFamily: "'DM Mono'", fontSize: 10.5, color: started === d.exercises.length ? "#3aa87d" : d.color, marginLeft: 6 }}>{started}/{d.exercises.length}</span>}
+              <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); setCueOpen(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#777", cursor: "pointer", padding: "14px 14px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1, whiteSpace: "nowrap" }}>
+                    Day <span style={{ color: activeDay === d.id ? d.color : "#777" }}>{d.id}</span>
+                    {started && <span style={{ fontFamily: "'DM Mono'", fontSize: 10.5, color: done === d.exercises.length ? "#3aa87d" : d.color, marginLeft: 6 }}>{done}/{d.exercises.length}</span>}
                   </button>
                 );
               })}
@@ -658,11 +643,12 @@ function Routine() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {day.exercises.map((ex, i) => {
               const isOpen = expanded === i;
-              const logged = hasAnyLog(day.id, i);
+              const doneSets = setsDone(day.id, i, ex);
+              const logged = doneSets === ex.sets;
               const ins = insights[i] || { last: null, next: null };
               return (
                 <div key={i} style={{ background: isOpen ? "#14161a" : logged ? "#0f1310" : "#111317", border: `1px solid ${isOpen ? day.color + "55" : logged ? "#2c4436" : "#1c1e24"}`, borderRadius: 8, overflow: "hidden" }}>
-                  <div onClick={() => setExpanded(isOpen ? null : i)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
+                  <div onClick={() => setExpanded(isOpen ? null : i)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 16px", cursor: "pointer" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: logged ? "#3aa87d" : day.color, minWidth: 20 }}>{String(i + 1).padStart(2, "0")}</span>
                       <div>
@@ -670,8 +656,9 @@ function Routine() {
                           <span style={{ fontSize: 14, fontWeight: logged ? 400 : 500, color: logged ? "#7d9c8b" : "#ddd", textDecoration: logged ? "line-through" : "none", textDecorationColor: "#3aa87d66" }}>{ex.name}</span>
                           {ex.dropSet && <span style={{ fontSize: 10, fontFamily: "'DM Mono'", color: "#0e0f11", background: day.color, padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>⬇ drop set</span>}
                           {logged && <span title="sets logged" style={{ fontSize: 10.5, fontFamily: "'DM Mono'", color: "#3aa87d", background: "#3aa87d14", border: "1px solid #3aa87d33", padding: "1px 7px", borderRadius: 999, fontWeight: 600 }}>✓ logged</span>}
+                          {!logged && doneSets > 0 && <span title="working sets logged" style={{ fontSize: 10.5, fontFamily: "'DM Mono'", color: day.color, background: day.color + "14", border: `1px solid ${day.color}33`, padding: "1px 7px", borderRadius: 999, fontWeight: 600 }}>{doneSets}/{ex.sets}</span>}
                         </div>
-                        <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{ex.target}</div>
+                        <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{ex.target}</div>
                         {ins.last && (
                           <div style={{ fontSize: 11, fontFamily: "'DM Mono'", marginTop: 3, color: "#666" }}>
                             last <span style={{ color: "#999" }}>{ins.last.weight || "—"}×{ins.last.reps}</span>
@@ -682,8 +669,8 @@ function Routine() {
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 12, color: "#888", fontFamily: "'DM Mono'" }}>{ex.sets}×{ex.reps}</div>
-                        <div style={{ fontSize: 11, color: "#444", marginTop: 1 }}>RIR {ex.rir}</div>
+                        <div style={{ fontSize: 12, color: "#888", fontFamily: "'DM Mono'", whiteSpace: "nowrap" }}>{ex.sets}×{ex.reps}</div>
+                        <div style={{ fontSize: 11, color: "#777", marginTop: 1 }}>RIR {ex.rir}</div>
                       </div>
                       <span style={{ color: "#333", fontSize: 14, marginLeft: 4 }}>{isOpen ? "−" : "+"}</span>
                     </div>
@@ -694,7 +681,7 @@ function Routine() {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
                         <div>
                           <div onClick={() => setCueOpen(cueOpen === i ? null : i)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: 4 }}>
-                            <span style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase" }}>Coaching cue</span>
+                            <span style={{ fontSize: 11, color: "#777", fontFamily: "'DM Mono'", textTransform: "uppercase" }}>Coaching cue</span>
                             <span style={{ color: "#333", fontSize: 12 }}>{cueOpen === i ? "−" : "+"}</span>
                           </div>
                           {cueOpen === i && <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.5, marginBottom: 10 }}>{ex.note}</div>}
@@ -706,7 +693,7 @@ function Routine() {
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {[{ label: "Sets", val: ex.dropSet ? `${ex.sets} (+drop)` : ex.sets }, { label: "Reps", val: ex.reps }, { label: "RIR", val: ex.rir }, { label: "Rest", val: ex.rest }].map(({ label, val }) => (
                             <div key={label} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #1a1c21", paddingBottom: 6 }}>
-                              <span style={{ fontSize: 11, color: "#444", textTransform: "uppercase", fontFamily: "'DM Mono'" }}>{label}</span>
+                              <span style={{ fontSize: 11, color: "#777", textTransform: "uppercase", fontFamily: "'DM Mono'" }}>{label}</span>
                               <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Mono'" }}>{val}</span>
                             </div>
                           ))}
@@ -715,7 +702,7 @@ function Routine() {
 
                       {ex.warmupNote && (
                         <div style={{ background: "#0e0f11", border: "1px solid #1e2025", borderRadius: 6, padding: "10px 12px", marginBottom: 16 }}>
-                          <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: "#444", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>warm-up</div>
+                          <div style={{ fontSize: 11, fontFamily: "'DM Mono'", color: "#777", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>warm-up</div>
                           {(ex.warmup || []).map((w, wi) => {
                             const top = Number(getLog(day.id, i, 0).weight);
                             const load = top > 0 ? Math.round((top * w.pct) / 100 / 5) * 5 : 0;
@@ -767,20 +754,21 @@ function Routine() {
                       )}
 
                       <div style={{ borderTop: "1px solid #1a1c21", paddingTop: 14 }}>
-                        <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 10 }}>Log weight &amp; reps</div>
+                        <div style={{ fontSize: 11, color: "#777", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 10 }}>Log weight &amp; reps</div>
                         <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 1fr", gap: "6px 10px", alignItems: "center" }}>
                           <div />
-                          <div style={{ fontSize: 10, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", textAlign: "center" }}>lbs</div>
-                          <div style={{ fontSize: 10, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", textAlign: "center" }}>reps done</div>
+                          <div style={{ fontSize: 10, color: "#777", fontFamily: "'DM Mono'", textTransform: "uppercase", textAlign: "center" }}>lbs</div>
+                          <div style={{ fontSize: 10, color: "#777", fontFamily: "'DM Mono'", textTransform: "uppercase", textAlign: "center" }}>reps done</div>
 
                           {Array.from({ length: ex.sets }).map((_, s) => {
                             const isDropTop = ex.dropSet && s === ex.sets - 1;
                             const log = getLog(day.id, i, s);
                             const filled = log.weight || log.reps;
+                            const prevWeight = s > 0 ? getLog(day.id, i, s - 1).weight : "";
                             return (
                               <React.Fragment key={`set-${s}`}>
-                                <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#555" }}>{isDropTop ? "S" + (s + 1) + " ⬇" : "S" + (s + 1)}</div>
-                                <input type="text" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#777" }}>{isDropTop ? "S" + (s + 1) + " ⬇" : "S" + (s + 1)}</div>
+                                <input type="text" inputMode="decimal" placeholder={prevWeight || "—"} value={log.weight} onClick={(e) => e.stopPropagation()} onFocus={() => { if (!log.weight && prevWeight) updateLog(day.id, i, s, "weight", prevWeight); }} onChange={(e) => updateLog(day.id, i, s, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
                                 <input type="text" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
                               </React.Fragment>
                             );
@@ -791,7 +779,7 @@ function Routine() {
                             const filled = log.weight || log.reps;
                             return (
                               <React.Fragment key={`drop-${dk}`}>
-                                <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#555", paddingLeft: 12 }}>↳ d{di + 1}</div>
+                                <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#777", paddingLeft: 12 }}>↳ d{di + 1}</div>
                                 <input type="text" inputMode="decimal" placeholder="—" value={log.weight} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
                                 <input type="text" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, dk, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
                               </React.Fragment>
@@ -815,6 +803,7 @@ function Routine() {
       {/* PLAN VIEW — reference content, out of the way of logging */}
       {view === "plan" && (
         <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 28px 40px" }}>
+          <p style={{ margin: "0 0 20px", color: "#888", fontSize: 13.5, lineHeight: 1.5 }}>2 days/week · 5 movements/session · 6–8 reps · drop set on the final isolation</p>
           <div style={{ background: "#111317", border: "1px solid #1c1e24", borderRadius: 8, padding: "16px" }}>
             <div style={{ fontSize: 11, color: "#444", fontFamily: "'DM Mono'", textTransform: "uppercase", marginBottom: 12 }}>{person.name} · weekly direct sets per muscle</div>
             {person.weeklySets.map(({ muscle, sets, color }) => (
@@ -847,7 +836,7 @@ function Routine() {
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(14,15,17,0.96)", borderTop: `1px solid ${day.color}44`, padding: "10px 28px calc(10px + env(safe-area-inset-bottom))", zIndex: 150 }}>
           <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <span style={{ fontFamily: "'DM Mono'", fontSize: 11, color: "#888", whiteSpace: "nowrap" }}>
-              {day.id} · {person.name} · {day.exercises.filter((_, i) => hasAnyLog(day.id, i)).length}/{day.exercises.length} ex
+              {day.id} · {person.name} · {day.exercises.filter((ex, i) => setsDone(day.id, i, ex) === ex.sets).length}/{day.exercises.length} ex
             </span>
             <button onClick={finishSession} style={{ background: day.color + "16", border: `1px solid ${day.color}66`, color: day.color, fontFamily: "'DM Mono'", fontSize: 12.5, fontWeight: 500, cursor: "pointer", padding: "10px 18px", borderRadius: 7, letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
               ✓ Finish &amp; save
@@ -875,7 +864,6 @@ function Routine() {
                   {[{ id: "me", label: person.name }, { id: "both", label: "Both" }].map((f) => (
                     <button key={f.id} onClick={() => { setHistoryFilter(f.id); setExpandedSession(null); }} style={{ background: historyFilter === f.id ? "#1a1c22" : "none", border: `1px solid ${historyFilter === f.id ? "#33363e" : "#22242b"}`, color: historyFilter === f.id ? "#ccc" : "#555", fontFamily: "'DM Mono'", fontSize: 10.5, cursor: "pointer", padding: "4px 10px", borderRadius: 999, letterSpacing: "0.05em" }}>{f.label}</button>
                   ))}
-                  <button onClick={exportData} style={btn()}>↓ export</button>
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -922,6 +910,19 @@ function Routine() {
                 })}
               </div>
             </>)}
+
+            {/* Backup & data — away from the logging screen so nothing destructive is a mis-tap away */}
+            <div style={{ marginTop: 32, borderTop: "1px solid #1c1e24", paddingTop: 16 }}>
+              <div style={{ fontSize: 11, color: "#777", fontFamily: "'DM Mono'", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Backup &amp; data</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button onClick={exportData} style={btn()}>↓ export</button>
+                <button onClick={() => setImportOpen(true)} style={btn()}>↑ import</button>
+                {hasData(logs) && (
+                  <button onClick={() => { if (window.confirm(`Clear ${person.name}'s current sheet? Logged sets that haven't been saved to history will be lost.`)) clearLogs(); }} style={{ marginLeft: "auto", ...btn("#2a1a1a", "#6b3030") }}>clear sheet</button>
+                )}
+              </div>
+              <div style={{ fontSize: 11.5, color: "#666", marginTop: 8, lineHeight: 1.5 }}>Export saves every profile to a file — it's the only backup. Import merges without duplicates.</div>
+            </div>
           </div>
         );
       })()}

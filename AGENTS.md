@@ -16,7 +16,7 @@ offline.
 
 | File | Role |
 |---|---|
-| `index.html` | **The entire app.** Data, component, styles, bootstrap — all of it (~860 lines) |
+| `index.html` | **The entire app.** Data, component, styles, bootstrap — all of it (~950 lines) |
 | `sw.js` | Service worker. Cache-first offline shell |
 | `manifest.webmanifest` | PWA manifest (install / home-screen) |
 | `icon-192.png`, `icon-512.png` | App icons |
@@ -144,8 +144,8 @@ python3 -m http.server 8080
 ```
 
 Then manually: expand an exercise, type in a weight, reload the page (values persist),
-Finish & save (session appears in History), export (file downloads), import it back
-(no duplicates).
+Finish & save (session appears in History), then from History → Backup & data: export
+(file downloads), import it back (no duplicates).
 
 Because JSX compiles in-browser, **a syntax error produces a blank page, not a build
 error.** Always load the page once after editing.

@@ -23,8 +23,8 @@ no server, no tracking. All data lives in your browser's `localStorage`.
 - **Multiple profiles** (the app ships with two configured plans).
 - **"Why this works" cards** — the programming rationale is documented in-app,
   including per-muscle weekly volume targets.
-- **JSON export/import** — one file is your backup; re-importing merges by session ID,
-  so it's idempotent and never duplicates history.
+- **JSON export/import** (under History → Backup & data) — one file is your backup;
+  re-importing merges by session ID, so it's idempotent and never duplicates history.
 - **Offline-first PWA** — a service worker caches the whole app after the first load,
   so it opens at the gym with no signal.
 
@@ -34,7 +34,7 @@ Deliberately minimal: **one HTML file**, no build step, no bundler, no dependenc
 
 | File | Role |
 |---|---|
-| `index.html` | The entire app — data, React component, styles, bootstrap (~900 lines) |
+| `index.html` | The entire app — data, React component, styles, bootstrap (~950 lines) |
 | `sw.js` | Service worker; cache-first offline shell with a content-hashed cache name |
 | `manifest.webmanifest` | PWA manifest (installable / add to home screen) |
 | `icon-192.png`, `icon-512.png` | App icons |
