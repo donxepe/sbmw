@@ -51,7 +51,7 @@ Rough layout of that script block:
   note: "...",          // coaching cue
   target: "Chest, Anterior Delt, Triceps",
   warmup: [{ pct: 50, reps: 8, label: "50%" }],  // [] = no warm-up sets
-  warmupNote: "...",    // shown either way; explains the why
+  warmupNote: "...",    // collapsed by default behind a "why these sets" toggle; the W-row numbers stay visible
   dropSet: true,        // optional — adds badge, protocol box, d1/d2 log rows
   dropNote: "...",      // required if dropSet
 }

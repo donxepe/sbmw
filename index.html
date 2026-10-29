@@ -198,6 +198,7 @@ function Routine() {
   const [activeDay, setActiveDay] = useState("A");
   const [expanded, setExpanded] = useState(null);
   const [cueOpen, setCueOpen] = useState(null);
+  const [warmupOpen, setWarmupOpen] = useState(null);
   const [personId, setPersonId] = useState(() => {
     const saved = loadJSON(STORE_PERSON, DEFAULT_PERSON);
     return people.some((p) => p.id === saved) ? saved : DEFAULT_PERSON;
@@ -210,6 +211,7 @@ function Routine() {
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [suggestions, setSuggestions] = useState(null);
+  const [placeholderFills, setPlaceholderFills] = useState({}); // `${dayId}-${exIdx}` → { weight, reps, sets } — suggestion placeholders only, never written to the log
   const [historyFilter, setHistoryFilter] = useState("me");
   const [dataTick, setDataTick] = useState(0); // bumped after writes to non-active profiles' stores
   const noticeTimer = useRef(null);
@@ -307,6 +309,8 @@ function Routine() {
     setHistory(loadHistory(id));
     setExpanded(null);
     setCueOpen(null);
+    setWarmupOpen(null);
+    setPlaceholderFills({});
     setExpandedSession(null);
   }
 
@@ -504,35 +508,22 @@ function Routine() {
     else setDataTick((t) => t + 1); // other profile's store changed; refresh timeline
   }
 
-  // Fill every working-set row of an exercise with the suggested numbers. Drop rows
-  // are left alone — they're failure work at reduced load and can't be pre-filled.
-  function prefillExercise(exIdx, next) {
-    if (!next) return;
-    setLogs((prev) => {
-      const n = day.exercises[exIdx];
-      const nextMap = { ...prev };
-      for (let s = 0; s < n.sets; s++) {
-        nextMap[key(day.id, exIdx, s)] = { weight: next.weight || "", reps: String(next.reps) };
-      }
-      saveJSON(logsKey(personId), nextMap);
-      return nextMap;
-    });
+  // Suggested numbers become input placeholders, not values — the sheet stays
+  // untouched until the user types (or taps into) a row themselves. `sets` is how
+  // many leading working rows carry the placeholder; recovery halves that. Drop
+  // rows are left alone — they're failure work at reduced load.
+  function fillPlaceholders(exIdx, weight, reps, sets) {
+    setPlaceholderFills((prev) => ({ ...prev, [`${day.id}-${exIdx}`]: { weight, reps, sets } }));
   }
 
-  // Recovery version of the suggestion: ceil(sets/2) rows at RECOVERY_LOAD of the
-  // suggested weight (rounded to 5, like warm-ups); the remaining working rows are cleared.
-  function recoveryFill(exIdx, next) {
+  // Recovery version of the suggestion: ceil(sets/2) leading rows at RECOVERY_LOAD
+  // of the suggested weight (rounded to 5, like warm-ups); the rest stay blank.
+  function recoveryPlaceholders(exIdx, next) {
     const n = day.exercises[exIdx];
     const w = Number(next.weight);
     const weight = w > 0 ? String(Math.round((w * RECOVERY_LOAD) / 5) * 5) : "";
     const sets = Math.ceil(n.sets / 2);
-    prefillExercise(exIdx, { weight, reps: next.reps });
-    setLogs((prev) => {
-      const nextMap = { ...prev };
-      for (let s = sets; s < n.sets; s++) delete nextMap[key(day.id, exIdx, s)];
-      saveJSON(logsKey(personId), nextMap);
-      return nextMap;
-    });
+    fillPlaceholders(exIdx, weight, next.reps, sets);
     return { weight, sets };
   }
 
@@ -622,14 +613,14 @@ function Routine() {
                 const started = d.exercises.some((_, i) => hasAnyLog(d.id, i));
                 const done = d.exercises.filter((ex, i) => setsDone(d.id, i, ex) === ex.sets).length;
                 return (
-              <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); setCueOpen(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#777", cursor: "pointer", padding: "14px 14px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1, whiteSpace: "nowrap" }}>
+              <button key={d.id} onClick={() => { setActiveDay(d.id); setExpanded(null); setCueOpen(null); setWarmupOpen(null); }} style={{ background: "none", border: "none", borderBottom: activeDay === d.id ? `2px solid ${d.color}` : "2px solid transparent", color: activeDay === d.id ? "#e8e6e1" : "#777", cursor: "pointer", padding: "14px 14px 13px", fontSize: 13.5, fontFamily: "'DM Sans'", fontWeight: activeDay === d.id ? 600 : 400, marginBottom: -1, whiteSpace: "nowrap" }}>
                     Day <span style={{ color: activeDay === d.id ? d.color : "#777" }}>{d.id}</span>
                     {started && <span style={{ fontFamily: "'DM Mono'", fontSize: 10.5, color: done === d.exercises.length ? "#3aa87d" : d.color, marginLeft: 6 }}>{done}/{d.exercises.length}</span>}
                   </button>
                 );
               })}
             </div>
-            <button onClick={() => setSuggestions((s) => !s)} style={{ background: "none", border: "none", color: suggestions ? day.color : "#555", cursor: "pointer", fontFamily: "'DM Mono'", fontSize: 11, fontWeight: suggestions ? 500 : 400, padding: "14px 4px 11px", whiteSpace: "nowrap", letterSpacing: "0.05em" }}>
+            <button onClick={() => { const on = !suggestions; setSuggestions(on); if (!on) setPlaceholderFills({}); }} style={{ background: "none", border: "none", color: suggestions ? day.color : "#555", cursor: "pointer", fontFamily: "'DM Mono'", fontSize: 11, fontWeight: suggestions ? 500 : 400, padding: "14px 4px 11px", whiteSpace: "nowrap", letterSpacing: "0.05em" }}>
               ✨ Suggested{
                 suggestions ? " · ON" : ""
               }
@@ -715,7 +706,11 @@ function Routine() {
                               </div>
                             );
                           })}
-                          <div style={{ fontSize: 12, color: "#666", lineHeight: 1.5, marginTop: (ex.warmup || []).length ? 6 : 0 }}>{ex.warmupNote}</div>
+                          <div onClick={() => setWarmupOpen(warmupOpen === i ? null : i)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginTop: (ex.warmup || []).length ? 6 : 0 }}>
+                            <span style={{ fontSize: 11, color: "#555", fontFamily: "'DM Mono'", textTransform: "uppercase", letterSpacing: "0.08em" }}>{warmupOpen === i ? "hide why" : "why these sets"}</span>
+                            <span style={{ color: "#333", fontSize: 12 }}>{warmupOpen === i ? "−" : "+"}</span>
+                          </div>
+                          {warmupOpen === i && <div style={{ fontSize: 12, color: "#666", lineHeight: 1.5, marginTop: 6 }}>{ex.warmupNote}</div>}
                         </div>
                       )}
 
@@ -731,10 +726,10 @@ function Routine() {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
                             <span style={{ fontSize: 11, fontFamily: "'DM Mono'", color: day.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>suggested next time</span>
                             <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={(e) => { e.stopPropagation(); prefillExercise(i, ins.next); flash(`Filled ${ex.name} with ${ins.next.weight || "—"} lb × ${ins.next.reps}.`); }} style={{ background: day.color + "22", border: `1px solid ${day.color}66`, color: day.color, fontFamily: "'DM Mono'", fontSize: 10.5, fontWeight: 500, cursor: "pointer", padding: "4px 10px", borderRadius: 4, letterSpacing: "0.05em" }}>
+                            <button onClick={(e) => { e.stopPropagation(); fillPlaceholders(i, ins.next.weight || "", ins.next.reps, ex.sets); flash(`Placeholders for ${ex.name}: ${ins.next.weight || "—"} lb × ${ins.next.reps}.`); }} style={{ background: day.color + "22", border: `1px solid ${day.color}66`, color: day.color, fontFamily: "'DM Mono'", fontSize: 10.5, fontWeight: 500, cursor: "pointer", padding: "4px 10px", borderRadius: 4, letterSpacing: "0.05em" }}>
                               use these numbers
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); const r = recoveryFill(i, ins.next); flash(`Recovery: ${r.sets} × ${r.weight || "—"} lb × ${ins.next.reps} for ${ex.name}.`); }} style={{ background: "none", border: "1px solid #2a2c33", color: "#999", fontFamily: "'DM Mono'", fontSize: 10.5, cursor: "pointer", padding: "4px 10px", borderRadius: 4, letterSpacing: "0.05em" }}>
+                            <button onClick={(e) => { e.stopPropagation(); const r = recoveryPlaceholders(i, ins.next); flash(`Recovery placeholders for ${ex.name}: ${r.sets} × ${r.weight || "—"} lb × ${ins.next.reps}.`); }} style={{ background: "none", border: "1px solid #2a2c33", color: "#999", fontFamily: "'DM Mono'", fontSize: 10.5, cursor: "pointer", padding: "4px 10px", borderRadius: 4, letterSpacing: "0.05em" }}>
                               recovery
                             </button>
                             </div>
@@ -767,11 +762,14 @@ function Routine() {
                             const log = getLog(day.id, i, s);
                             const filled = log.weight || log.reps;
                             const prevWeight = s > 0 ? getLog(day.id, i, s - 1).weight : "";
+                            const fill = placeholderFills[`${day.id}-${i}`];
+                            const sugW = fill && s < fill.sets && fill.weight ? fill.weight : "";
+                            const sugR = fill && s < fill.sets ? fill.reps : "";
                             return (
                               <React.Fragment key={`set-${s}`}>
                                 <div style={{ fontFamily: "'DM Mono'", fontSize: 11, color: filled ? day.color : "#777" }}>{isDropTop ? "S" + (s + 1) + " ⬇" : "S" + (s + 1)}</div>
-                                <input type="text" inputMode="decimal" placeholder={prevWeight || "—"} value={log.weight} onClick={(e) => e.stopPropagation()} onFocus={() => { if (!log.weight && prevWeight) updateLog(day.id, i, s, "weight", prevWeight); }} onChange={(e) => updateLog(day.id, i, s, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
-                                <input type="text" inputMode="numeric" placeholder="—" value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="text" inputMode="decimal" placeholder={sugW || prevWeight || "—"} value={log.weight} onClick={(e) => e.stopPropagation()} onFocus={() => { if (!log.weight && prevWeight) updateLog(day.id, i, s, "weight", prevWeight); }} onChange={(e) => updateLog(day.id, i, s, "weight", e.target.value)} style={inputStyle(filled, day.color)} />
+                                <input type="text" inputMode="numeric" placeholder={sugR || "—"} value={log.reps} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLog(day.id, i, s, "reps", e.target.value)} style={inputStyle(filled, day.color)} />
                               </React.Fragment>
                             );
                           })}
